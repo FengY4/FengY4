@@ -1448,8 +1448,8 @@ local function createSectionBuilder(parent, contentContainer, elementWidth, wind
                 if state.Mode == "Hold" then
                     local key = state.Key
                     if key=="MouseLeft" and input.UserInputType==Enum.UserInputType.MouseButton1 then doRelease()
-                    elseif key=="MouseRight" and input.UserInputType==Enum.UserInputType.MouseButton2 then doRelease()
-                    elseif input.UserInputType==Enum.UserInputType.Keyboard and input.KeyCode.Name==key then doRelease() end
+                    elif key=="MouseRight" and input.UserInputType==Enum.UserInputType.MouseButton2 then doRelease()
+                    elif input.UserInputType==Enum.UserInputType.Keyboard and input.KeyCode.Name==key then doRelease() end
                 end
             end)
             local function cleanup()
@@ -1736,8 +1736,8 @@ local function createSectionBuilder(parent, contentContainer, elementWidth, wind
                 if type(asset)=="number" then return "rbxassetid://"..tostring(asset)
                 elseif type(asset)=="string" then
                     if tonumber(asset) then return "rbxassetid://"..asset
-                    elseif asset:match("^rbxassetid://") then return asset
-                    elseif asset:match("^http") then return asset
+                    elif asset:match("^rbxassetid://") then return asset
+                    elif asset:match("^http") then return asset
                     else return "rbxassetid://"..asset end
                 end
                 return "rbxassetid://78229538488090"
@@ -3287,7 +3287,7 @@ local function createSectionBuilder(parent, contentContainer, elementWidth, wind
         end
 
         -- ================================================================
-        --  COLORPICKER (移植自 FluentPro)
+        --  COLORPICKER (修正版 - 使用 win.ScreenGui)
         -- ================================================================
         child.Colorpicker = function(_, config)
             config = config or {}
@@ -3302,11 +3302,9 @@ local function createSectionBuilder(parent, contentContainer, elementWidth, wind
             local locked = config.Locked == true
             local lockedTitle = config.LockedTitle or "Locked"
 
-            -- 当前值
             local currentColor = defaultColor
             local currentAlpha = defaultTransparency
 
-            -- 构造主行（类似其他元素）
             local Tile = Instance.new("Frame")
             Tile.Size = UDim2.new(1, 0, 0, 42)
             Tile.Parent = parent
@@ -3325,7 +3323,6 @@ local function createSectionBuilder(parent, contentContainer, elementWidth, wind
             TitleLbl.Parent = Tile
             AddToRegistry(TitleLbl, "TextColor3", "Text")
 
-            -- 颜色预览方块
             local ColorBox = Instance.new("Frame")
             ColorBox.Size = UDim2.fromOffset(26, 26)
             ColorBox.Position = UDim2.new(1, -10, 0.5, 0)
@@ -3336,7 +3333,6 @@ local function createSectionBuilder(parent, contentContainer, elementWidth, wind
             local boxCorner = Instance.new("UICorner")
             boxCorner.CornerRadius = UDim.new(0, 4)
             boxCorner.Parent = ColorBox
-            -- 棋盘背景（指示透明度）
             local checker = Instance.new("ImageLabel")
             checker.Size = UDim2.fromScale(1, 1)
             checker.BackgroundTransparency = 1
@@ -3347,7 +3343,6 @@ local function createSectionBuilder(parent, contentContainer, elementWidth, wind
             checker.Parent = ColorBox
             checker.ZIndex = 0
 
-            -- 锁定覆盖
             local lockFrame, lockLabel = createLockOverlay(Tile, lockedTitle)
             lockFrame.Visible = locked
             local ClickBtn = Instance.new("TextButton")
@@ -3366,14 +3361,15 @@ local function createSectionBuilder(parent, contentContainer, elementWidth, wind
             -- ---------- 颜色选择器弹窗 ----------
             local function openPicker()
                 if locked then return end
+                local gui = win.ScreenGui   -- 通过 win 获取 ScreenGui
+                if not gui then return end
 
-                -- 创建模态背景
                 local overlay = Instance.new("Frame")
                 overlay.Size = UDim2.new(1, 0, 1, 0)
                 overlay.BackgroundTransparency = 0.6
                 overlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
                 overlay.ZIndex = 100
-                overlay.Parent = ScreenGui
+                overlay.Parent = gui
 
                 local pickerFrame = Instance.new("Frame")
                 pickerFrame.Size = UDim2.new(0, 430, 0, 380)
@@ -3397,38 +3393,30 @@ local function createSectionBuilder(parent, contentContainer, elementWidth, wind
                     stroke.Color = CurrentTheme.Stroke
                 end)
 
-                -- 当前颜色状态（HSV）
                 local h, s, v = Color3.toHSV(currentColor)
                 local alpha = currentAlpha
-                local oldH, oldS, oldV = h, s, v
-                local oldAlpha = alpha
 
-                -- 辅助：更新所有UI
-                local function updateUI()
+                local function refreshUI()
                     local col = Color3.fromHSV(h, s, v)
-                    ColorBox.BackgroundColor3 = col
-                    ColorBox.BackgroundTransparency = alpha
-
-                    -- 更新预览和输入
-                    -- 这里我们动态更新控件（下面会定义）
+                    satValArea.BackgroundColor3 = Color3.fromHSV(h, 1, 1)
+                    satFill.BackgroundColor3 = col
+                    satFill.BackgroundTransparency = alpha
+                    satKnob.Position = UDim2.new(s, 0, 1 - v, 0)
+                    hueKnob.Position = UDim2.new(0, 6, h, 0)
+                    if alphaFill then
+                        alphaFill.BackgroundColor3 = col
+                        alphaKnob.Position = UDim2.new(0, 6, 1 - alpha, 0)
+                    end
+                    hexBox.Text = "#" .. col:ToHex()
+                    rBox.Text = tostring(math.floor(col.r * 255))
+                    gBox.Text = tostring(math.floor(col.g * 255))
+                    bBox.Text = tostring(math.floor(col.b * 255))
+                    if alphaBox then
+                        alphaBox.Text = tostring(math.floor((1 - alpha) * 100)) .. "%"
+                    end
                 end
 
-                -- 构建控件
-                local function newLabel(text, pos)
-                    local lbl = Instance.new("TextLabel")
-                    lbl.Text = text
-                    lbl.Size = UDim2.new(1, 0, 0, 32)
-                    lbl.Position = pos
-                    lbl.BackgroundTransparency = 1
-                    lbl.Font = Enum.Font.GothamMedium
-                    lbl.TextSize = 13
-                    lbl.TextXAlignment = Enum.TextXAlignment.Left
-                    lbl.Parent = pickerFrame
-                    AddToRegistry(lbl, "TextColor3", "Text")
-                    return lbl
-                end
-
-                -- 饱和度/亮度选择区域
+                -- 饱和度/亮度区域
                 local satValArea = Instance.new("Frame")
                 satValArea.Size = UDim2.fromOffset(180, 160)
                 satValArea.Position = UDim2.fromOffset(20, 55)
@@ -3439,7 +3427,6 @@ local function createSectionBuilder(parent, contentContainer, elementWidth, wind
                 satCorner.CornerRadius = UDim.new(0, 4)
                 satCorner.Parent = satValArea
 
-                -- 棋盘背景（透明度预览）
                 local satChecker = Instance.new("ImageLabel")
                 satChecker.Size = UDim2.fromScale(1, 1)
                 satChecker.BackgroundTransparency = 1
@@ -3450,7 +3437,6 @@ local function createSectionBuilder(parent, contentContainer, elementWidth, wind
                 satChecker.Parent = satValArea
                 satChecker.ZIndex = 0
 
-                -- 颜色填充（在棋盘之上）
                 local satFill = Instance.new("Frame")
                 satFill.Size = UDim2.fromScale(1, 1)
                 satFill.BackgroundColor3 = Color3.fromHSV(h, 1, 1)
@@ -3461,7 +3447,6 @@ local function createSectionBuilder(parent, contentContainer, elementWidth, wind
                 satFillCorner.CornerRadius = UDim.new(0, 4)
                 satFillCorner.Parent = satFill
 
-                -- 选择器十字
                 local satKnob = Instance.new("ImageLabel")
                 satKnob.Size = UDim2.fromOffset(14, 14)
                 satKnob.Image = "http://www.roblox.com/asset/?id=12266946128"
@@ -3507,7 +3492,7 @@ local function createSectionBuilder(parent, contentContainer, elementWidth, wind
                 hueKnob.Parent = hueSlider
                 AddToRegistry(hueKnob, "ImageColor3", "Text")
 
-                -- 透明度条（如果支持）
+                -- 透明度条
                 local alphaBar, alphaKnob, alphaFill
                 if config.Transparency ~= nil then
                     alphaBar = Instance.new("Frame")
@@ -3519,7 +3504,6 @@ local function createSectionBuilder(parent, contentContainer, elementWidth, wind
                     alphaCorner.CornerRadius = UDim.new(1, 0)
                     alphaCorner.Parent = alphaBar
 
-                    -- 棋盘背景
                     local alphaChecker = Instance.new("ImageLabel")
                     alphaChecker.Size = UDim2.fromScale(1, 1)
                     alphaChecker.BackgroundTransparency = 1
@@ -3559,7 +3543,7 @@ local function createSectionBuilder(parent, contentContainer, elementWidth, wind
                     AddToRegistry(alphaKnob, "ImageColor3", "Text")
                 end
 
-                -- 输入框区域
+                -- 输入框
                 local function createInputBox(labelText, posX, posY, defaultText)
                     local frame = Instance.new("Frame")
                     frame.Size = UDim2.new(0, 80, 0, 30)
@@ -3594,7 +3578,6 @@ local function createSectionBuilder(parent, contentContainer, elementWidth, wind
                     box.ClearTextOnFocus = false
                     box.Parent = frame
                     AddToRegistry(box, "TextColor3", "Accent")
-
                     return box
                 end
 
@@ -3607,8 +3590,8 @@ local function createSectionBuilder(parent, contentContainer, elementWidth, wind
                     alphaBox = createInputBox("Alpha", 260, 215, tostring(math.floor((1 - alpha) * 100)) .. "%")
                 end
 
-                -- 确定 / 取消 按钮
-                local function makeButton(text, posX, callback)
+                -- 确定/取消
+                local function makeButton(text, posX, cb)
                     local btn = Instance.new("TextButton")
                     btn.Text = text
                     btn.Size = UDim2.fromOffset(80, 30)
@@ -3626,60 +3609,34 @@ local function createSectionBuilder(parent, contentContainer, elementWidth, wind
                     stroke.Transparency = 0.6
                     stroke.Parent = btn
                     AddToRegistry(stroke, "Color", "Stroke")
-                    btn.MouseButton1Click:Connect(callback)
+                    btn.MouseButton1Click:Connect(cb)
                     return btn
                 end
 
-                -- 更新所有控件
-                local function refreshUI()
-                    local col = Color3.fromHSV(h, s, v)
-                    satValArea.BackgroundColor3 = Color3.fromHSV(h, 1, 1)
-                    satFill.BackgroundColor3 = col
-                    satFill.BackgroundTransparency = alpha
-                    satKnob.Position = UDim2.new(s, 0, 1 - v, 0)
-                    hueKnob.Position = UDim2.new(0, 6, h, 0)
-                    if alphaFill then
-                        alphaFill.BackgroundColor3 = col
-                        alphaKnob.Position = UDim2.new(0, 6, 1 - alpha, 0)
-                    end
-                    hexBox.Text = "#" .. col:ToHex()
-                    rBox.Text = tostring(math.floor(col.r * 255))
-                    gBox.Text = tostring(math.floor(col.g * 255))
-                    bBox.Text = tostring(math.floor(col.b * 255))
-                    if alphaBox then
-                        alphaBox.Text = tostring(math.floor((1 - alpha) * 100)) .. "%"
-                    end
-                end
-
-                -- 鼠标拖动逻辑
-                local function startDrag(area, callback)
+                -- 拖动逻辑
+                local function startDrag(area, cb)
                     local dragging = false
                     local connMove, connEnd
-                    local function onInputBegin(input)
+                    area.InputBegan:Connect(function(input)
                         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                             dragging = true
-                            callback(input.Position)
+                            cb(input.Position)
                         end
-                    end
-                    local function onInputMove(input)
-                        if not dragging then return end
-                        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-                            callback(input.Position)
+                    end)
+                    connMove = UserInputService.InputChanged:Connect(function(input)
+                        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+                            cb(input.Position)
                         end
-                    end
-                    local function onInputEnd(input)
+                    end)
+                    connEnd = UserInputService.InputEnded:Connect(function(input)
                         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                             dragging = false
                             if connMove then connMove:Disconnect() end
                             if connEnd then connEnd:Disconnect() end
                         end
-                    end
-                    area.InputBegan:Connect(onInputBegin)
-                    connMove = UserInputService.InputChanged:Connect(onInputMove)
-                    connEnd = UserInputService.InputEnded:Connect(onInputEnd)
+                    end)
                 end
 
-                -- 饱和度/亮度拖动
                 startDrag(satValArea, function(pos)
                     local absPos = satValArea.AbsolutePosition
                     local absSize = satValArea.AbsoluteSize
@@ -3690,7 +3647,6 @@ local function createSectionBuilder(parent, contentContainer, elementWidth, wind
                     refreshUI()
                 end)
 
-                -- 色相拖动
                 startDrag(hueSlider, function(pos)
                     local absPos = hueSlider.AbsolutePosition
                     local absSize = hueSlider.AbsoluteSize
@@ -3698,7 +3654,6 @@ local function createSectionBuilder(parent, contentContainer, elementWidth, wind
                     refreshUI()
                 end)
 
-                -- 透明度拖动
                 if alphaSlider then
                     startDrag(alphaSlider, function(pos)
                         local absPos = alphaSlider.AbsolutePosition
@@ -3708,16 +3663,14 @@ local function createSectionBuilder(parent, contentContainer, elementWidth, wind
                     end)
                 end
 
-                -- 输入框变化事件
-                local function onHexFocusLost()
+                hexBox.FocusLost:Connect(function()
                     local txt = hexBox.Text:gsub("#", "")
                     local ok, col = pcall(Color3.fromHex, txt)
                     if ok and typeof(col) == "Color3" then
                         h, s, v = Color3.toHSV(col)
                         refreshUI()
                     end
-                end
-                hexBox.FocusLost:Connect(onHexFocusLost)
+                end)
 
                 local function onRGBFocusLost(box, channel)
                     local val = tonumber(box.Text)
@@ -3745,15 +3698,12 @@ local function createSectionBuilder(parent, contentContainer, elementWidth, wind
                     end)
                 end
 
-                -- 按钮
                 local function closePicker(save)
                     if save then
                         currentColor = Color3.fromHSV(h, s, v)
                         currentAlpha = alpha
-                        -- 更新主显示
                         ColorBox.BackgroundColor3 = currentColor
                         ColorBox.BackgroundTransparency = currentAlpha
-                        -- 保存配置并回调
                         if ConfigObjects[controlId] then
                             ConfigObjects[controlId].Value = {Color = currentColor, Transparency = currentAlpha}
                         end
@@ -3764,14 +3714,11 @@ local function createSectionBuilder(parent, contentContainer, elementWidth, wind
 
                 makeButton("确定", 260, function() closePicker(true) end)
                 makeButton("取消", 350, function() closePicker(false) end)
-
                 refreshUI()
             end
 
-            -- 点击触发
             ClickBtn.MouseButton1Click:Connect(openPicker)
 
-            -- 配置对象（支持保存）
             ConfigObjects[controlId] = {
                 Type = "Colorpicker",
                 Value = {Color = currentColor, Transparency = currentAlpha},
@@ -3810,7 +3757,6 @@ local function createSectionBuilder(parent, contentContainer, elementWidth, wind
                 SetVisible = function(vis) Tile.Visible = vis end,
                 Destroy = function() Tile:Destroy(); ConfigObjects[controlId] = nil end
             }
-
             return self
         end
         -- ================================================================
@@ -3868,6 +3814,9 @@ function Fenglib:CreateWindow(Config)
     ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     ScreenGui.ScreenInsets = Enum.ScreenInsets.None
     if syn and syn.protect_gui then syn.protect_gui(ScreenGui) elseif gethui then ScreenGui.Parent = gethui() end
+
+    -- ===== 关键修复：将 ScreenGui 保存到 Window 对象 =====
+    Window.ScreenGui = ScreenGui
 
     local NotificationHolder = Instance.new("Frame")
     NotificationHolder.Name = "NotificationHolder"
@@ -4187,7 +4136,7 @@ function Fenglib:CreateWindow(Config)
             accentGrad.Color = ColorSequence.new({ColorSequenceKeypoint.new(0, CurrentTheme.Accent), ColorSequenceKeypoint.new(1, CurrentTheme.Accent)})
             if content and content:IsA("ImageLabel") then
                 content.ImageColor3 = CurrentTheme.Text
-            elseif content and content:IsA("TextLabel") then
+            elif content and content:IsA("TextLabel") then
                 content.TextColor3 = CurrentTheme.Text
             end
         end)
