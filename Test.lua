@@ -3321,7 +3321,7 @@ function Fenglib:CreateWindow(Config)
     MainFrame.Position = UDim2.new(0.5,0,0.5,0)
     MainFrame.AnchorPoint = Vector2.new(0.5,0.5)
     MainFrame.ClipsDescendants = true
-    MainFrame.BackgroundTransparency = 0.035
+    MainFrame.BackgroundTransparency = 0.15
     MainFrame.Visible = false
     MainFrame.Parent = ScreenGui
     Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 12)
