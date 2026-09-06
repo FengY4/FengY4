@@ -1,8 +1,3 @@
--- ====================================================================
---  FengYu (Fenglib) + ModernV2 Window Shell 整合版
---  保留 Fenglib 全部控件，窗口外壳使用 ModernV2 的框架。
--- ====================================================================
-
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
@@ -19,351 +14,6 @@ local function safeDisconnect(conn)
         pcall(conn.Disconnect, conn)
     end
 end
-
--- ====================================================================
---  1. 嵌入 ModernV2 必需的函数（窗口骨架依赖）
--- ====================================================================
-local ModernV2 = {}  -- 我们将只使用窗口框架部分
-
--- 随机字符串
-function ModernV2:RandomString()
-    return string.rep(string.char(math.random(1,7)), math.random(1,4)) ..
-           string.rep(string.char(math.random(1,7)), math.random(1,4)) ..
-           string.rep(string.char(math.random(1,7)), math.random(1,4)) ..
-           string.rep(string.char(math.random(1,7)), math.random(1,4))
-end
-
--- 简单动画
-function ModernV2:PlayAnimate(obj, info, props)
-    local tween = TweenService:Create(obj, info or TweenInfo.new(0.25), props)
-    tween:Play()
-    return tween
-end
-
--- 拖拽
-function ModernV2:Drag(inputFrame, moveFrame, speed)
-    local dragToggle = false
-    local dragStart, startPos
-    local tweenInfo = TweenInfo.new(speed or 0.15)
-
-    local function updateInput(input)
-        local delta = input.Position - dragStart
-        local position = UDim2.new(
-            startPos.X.Scale, startPos.X.Offset + delta.X,
-            startPos.Y.Scale, startPos.Y.Offset + delta.Y
-        )
-        ModernV2:PlayAnimate(moveFrame, tweenInfo, { Position = position })
-    end
-
-    inputFrame.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragToggle = true
-            dragStart = input.Position
-            startPos = moveFrame.Position
-            local input_end
-            input_end = input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    dragToggle = false
-                    input_end:Disconnect()
-                end
-            end)
-        end
-    end)
-
-    UserInputService.InputChanged:Connect(function(input)
-        if (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) and dragToggle then
-            updateInput(input)
-        end
-    end)
-end
-
--- 阴影效果（简化）
-function ModernV2:CreateShadow(parent, rollingEffect)
-    local shadow = {}
-    local strokes = {}
-    for _, thick in ipairs({6,5,4,3}) do
-        local stroke = Instance.new("UIStroke")
-        stroke.Thickness = thick
-        stroke.Transparency = 1
-        stroke.Parent = parent
-        table.insert(strokes, stroke)
-    end
-    shadow.Render = function(self, value)
-        local trans = value and 0.9 or 1
-        for _, s in ipairs(strokes) do
-            ModernV2:PlayAnimate(s, TweenInfo.new(0.175), { Transparency = trans })
-        end
-    end
-    return shadow
-end
-
--- 图标模式（仅支持简单图标）
-function ModernV2:SetIconMode(label, icon)
-    if not label then return end
-    if type(icon) == "string" and icon:match("^%d+$") then
-        label.Image = "rbxassetid://"..icon
-    elseif type(icon) == "string" and icon:match("^rbxassetid://") then
-        label.Image = icon
-    elseif type(icon) == "string" and icon:match("^http") then
-        label.Image = icon
-    elseif type(icon) == "string" and icon:match("^lucide:") then
-        -- 使用内置图标（Roblox自带）
-        local map = {
-            ["lucide:x"] = "rbxassetid://10734902766",
-            ["lucide:chevron-small-down"] = "rbxassetid://10734898592",
-            ["lucide:search"] = "rbxassetid://10734898592",
-            ["lucide:copy"] = "rbxassetid://10734923549",
-            ["lucide:check"] = "rbxassetid://10734923549",
-            ["lucide:plus-large"] = "rbxassetid://10734923549",
-            ["lucide:trash-can"] = "rbxassetid://10734923549",
-            ["lucide:pencil-square"] = "rbxassetid://10734923549",
-            ["lucide:arrow-right-from-portrait-rectangle"] = "rbxassetid://10734923549",
-        }
-        label.Image = map[icon] or "rbxassetid://10734923549"
-    else
-        label.Image = ""
-    end
-    label.ScaleType = Enum.ScaleType.Fit
-end
-
--- 创建输入（点击区域）
-function ModernV2:CreateInput(frame, callback)
-    local btn = Instance.new("ImageButton")
-    btn.Parent = frame
-    btn.Size = UDim2.new(1,0,1,0)
-    btn.BackgroundTransparency = 1
-    btn.ImageTransparency = 1
-    btn.ZIndex = frame.ZIndex + 10
-    if callback then
-        btn.MouseButton1Click:Connect(callback)
-    end
-    return btn
-end
-
--- 文本渐变（可选）
-function ModernV2:AddTextGradient(label)
-    return label
-end
-
--- 全局信号管理（简化）
-ModernV2.GlobalSignals = {}
-function ModernV2:AddSignal(signal)
-    table.insert(ModernV2.GlobalSignals, signal)
-    return signal
-end
-
--- 颜色/主题变量（供窗口使用）
-ModernV2.AccentColor = Color3.fromRGB(80,140,255)
-ModernV2.MainColor = Color3.fromRGB(13,13,13)
-ModernV2.IconColor = Color3.fromRGB(255,255,255)
-ModernV2.ScreenGui = nil
-
--- 窗口创建（精简版，只保留框架）
-function ModernV2:CreateWindow(Config)
-    Config = Config or {}
-    local Title = Config.Name or "FengWindow"
-    local Subtitle = Config.SubName
-    local Keybind = Config.Keybind
-    local IconAsset = Config.Logo or "rbxassetid://78229538488090"
-    local AccentColor = Config.Accent or ModernV2.AccentColor
-    local MainColor = Config.Main or ModernV2.MainColor
-    
-    ModernV2.AccentColor = AccentColor
-    ModernV2.MainColor = MainColor
-
-    -- 创建 ScreenGui
-    local ScreenGui = Instance.new("ScreenGui")
-    ScreenGui.Name = "FengYuWindow"
-    ScreenGui.Parent = CoreGui
-    ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    if syn and syn.protect_gui then syn.protect_gui(ScreenGui) elseif gethui then ScreenGui.Parent = gethui() end
-    
-    -- 窗口主框架
-    local WindowFrame = Instance.new("Frame")
-    WindowFrame.Name = ModernV2:RandomString()
-    WindowFrame.Parent = ScreenGui
-    WindowFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-    WindowFrame.BackgroundColor3 = MainColor
-    WindowFrame.BackgroundTransparency = 0.055
-    WindowFrame.BorderSizePixel = 0
-    WindowFrame.ClipsDescendants = true
-    WindowFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
-    WindowFrame.Size = UDim2.new(0, 640, 0, 480)
-    WindowFrame.Active = true
-    Instance.new("UICorner", WindowFrame).CornerRadius = UDim.new(0, 10)
-
-    -- 拖拽区域
-    local DragFrame = Instance.new("Frame")
-    DragFrame.Parent = WindowFrame
-    DragFrame.BackgroundTransparency = 1
-    DragFrame.Size = UDim2.new(1, 0, 0, 50)
-    DragFrame.ZIndex = 7
-    ModernV2:Drag(DragFrame, WindowFrame, 0.15)
-
-    -- 阴影
-    local Shadow = ModernV2:CreateShadow(WindowFrame)
-    Shadow:Render(true)
-
-    -- 标题栏
-    local Topbar = Instance.new("Frame")
-    Topbar.Parent = WindowFrame
-    Topbar.BackgroundTransparency = 1
-    Topbar.Size = UDim2.new(1, 0, 0, 50)
-    Topbar.ZIndex = 7
-
-    local Logo = Instance.new("ImageLabel")
-    Logo.Parent = Topbar
-    Logo.Size = UDim2.new(0, 35, 0, 35)
-    Logo.Position = UDim2.new(0, 10, 0.5, -17.5)
-    Logo.BackgroundTransparency = 1
-    Logo.Image = IconAsset
-    Logo.ImageColor3 = Color3.new(1,1,1)
-    Instance.new("UICorner", Logo).CornerRadius = UDim.new(0, 7)
-
-    local TitleLabel = Instance.new("TextLabel")
-    TitleLabel.Parent = Topbar
-    TitleLabel.BackgroundTransparency = 1
-    TitleLabel.Position = UDim2.new(0, 55, 0, 4)
-    TitleLabel.Size = UDim2.new(1, -160, 0, 25)
-    TitleLabel.Font = Enum.Font.GothamBold
-    TitleLabel.Text = Title
-    TitleLabel.TextColor3 = Color3.new(1,1,1)
-    TitleLabel.TextSize = 18
-    TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
-    TitleLabel.TextTruncate = Enum.TextTruncate.None
-    ModernV2:AddTextGradient(TitleLabel)
-
-    if Subtitle then
-        local SubLabel = Instance.new("TextLabel")
-        SubLabel.Parent = Topbar
-        SubLabel.BackgroundTransparency = 1
-        SubLabel.Position = UDim2.new(0, 55, 0, 26)
-        SubLabel.Size = UDim2.new(1, -160, 0, 15)
-        SubLabel.Font = Enum.Font.GothamBold
-        SubLabel.Text = Subtitle
-        SubLabel.TextColor3 = Color3.new(1,1,1)
-        SubLabel.TextSize = 10
-        SubLabel.TextTransparency = 0.65
-        SubLabel.TextXAlignment = Enum.TextXAlignment.Left
-    end
-
-    -- 关闭按钮
-    local CloseBtn = Instance.new("ImageLabel")
-    CloseBtn.Parent = Topbar
-    CloseBtn.AnchorPoint = Vector2.new(1, 0.5)
-    CloseBtn.Position = UDim2.new(1, -10, 0.5, 0)
-    CloseBtn.Size = UDim2.new(0, 30, 0, 30)
-    CloseBtn.BackgroundTransparency = 1
-    ModernV2:SetIconMode(CloseBtn, "lucide:x")
-    CloseBtn.ImageColor3 = Color3.fromRGB(223,223,223)
-    CloseBtn.ImageTransparency = 0.45
-    CloseBtn.ScaleType = Enum.ScaleType.Fit
-    ModernV2:CreateInput(CloseBtn, function()
-        ScreenGui:Destroy()
-    end)
-
-    -- 左侧标签列表
-    local LeftMenu = Instance.new("Frame")
-    LeftMenu.Parent = WindowFrame
-    LeftMenu.BackgroundTransparency = 1
-    LeftMenu.Size = UDim2.new(0, 175, 1, 0)
-
-    local LeftScroll = Instance.new("ScrollingFrame")
-    LeftScroll.Parent = LeftMenu
-    LeftScroll.AnchorPoint = Vector2.new(0.5, 0)
-    LeftScroll.BackgroundTransparency = 1
-    LeftScroll.Position = UDim2.new(0.5, 0, 0, 60)
-    LeftScroll.Size = UDim2.new(1, -10, 1, -115)
-    LeftScroll.ScrollBarThickness = 0
-    local LeftLayout = Instance.new("UIListLayout")
-    LeftLayout.Parent = LeftScroll
-    LeftLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-    LeftLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    LeftLayout.Padding = UDim.new(0, 5)
-
-    -- 右侧内容容器
-    local RightMenu = Instance.new("Frame")
-    RightMenu.Parent = WindowFrame
-    RightMenu.BackgroundColor3 = MainColor
-    RightMenu.BackgroundTransparency = 0.600
-    RightMenu.ClipsDescendants = true
-    RightMenu.Position = UDim2.new(0, 176, 0, 0)
-    RightMenu.Size = UDim2.new(1, -176, 1, 0)
-    RightMenu.ZIndex = 8
-    Instance.new("UICorner", RightMenu).CornerRadius = UDim.new(0, 13)
-
-    local ContentContainer = Instance.new("Frame")
-    ContentContainer.Parent = RightMenu
-    ContentContainer.BackgroundTransparency = 1
-    ContentContainer.Position = UDim2.new(0, 0, 0, 50)
-    ContentContainer.Size = UDim2.new(1, 0, 1, -50)
-    ContentContainer.ZIndex = 5
-
-    -- 窗口可见性控制
-    local visible = false
-    local function SetVisible(value)
-        visible = value
-        if value then
-            WindowFrame.Visible = true
-            Shadow:Render(true)
-            ModernV2:PlayAnimate(WindowFrame, TweenInfo.new(0.3), {
-                BackgroundTransparency = 0.055,
-                Size = UDim2.new(0, 640, 0, 480)
-            })
-        else
-            ModernV2:PlayAnimate(WindowFrame, TweenInfo.new(0.3), {
-                BackgroundTransparency = 1,
-                Size = UDim2.new(0, 0, 0, 0)
-            })
-            task.delay(0.3, function() WindowFrame.Visible = false end)
-            Shadow:Render(false)
-        end
-    end
-
-    -- 键盘绑定
-    if Keybind then
-        UserInputService.InputBegan:Connect(function(input, gpe)
-            if not gpe and input.KeyCode == Keybind then
-                SetVisible(not visible)
-            end
-        end)
-    end
-
-    -- 返回窗口对象（兼容 Fenglib 接口）
-    local Window = {
-        Frame = WindowFrame,
-        ScreenGui = ScreenGui,
-        LeftScroll = LeftScroll,
-        ContentContainer = ContentContainer,
-        SetVisible = SetVisible,
-        Toggle = function() SetVisible(not visible) end,
-        Destroy = function() ScreenGui:Destroy() end,
-        -- 主题更新
-        SetTheme = function(self, name)
-            local theme = Themes and Themes[name]
-            if theme then
-                ModernV2.AccentColor = theme.Accent
-                ModernV2.MainColor = theme.Main
-                WindowFrame.BackgroundColor3 = theme.Main
-                RightMenu.BackgroundColor3 = theme.Main
-                -- 可触发其他监听器
-            end
-        end,
-        -- 通知（可外部覆盖）
-        Notify = function(self, notif)
-            -- 占位
-            print("Notification:", notif.Title, notif.Content)
-        end,
-    }
-
-    SetVisible(true)
-    ModernV2.ScreenGui = ScreenGui
-    return Window
-end
-
--- ====================================================================
---  2. Fenglib 原内容（主题、配置、控件生成等）
--- ====================================================================
 
 local Animation = {}
 do
@@ -451,10 +101,28 @@ end
 local Themes = {
     Dark = { Main=Color3.fromRGB(13,13,13), Top=Color3.fromRGB(28,28,30), Text=Color3.fromRGB(240,240,245), Accent=Color3.fromRGB(80,140,255), Stroke=Color3.fromRGB(45,45,48), SubText=Color3.fromRGB(160,160,170), Element=Color3.fromRGB(45,45,50), Hover=Color3.fromRGB(60,60,70), ShineEnabled=true, Shine={Speed=0.4,RotationSpeed=20,ColorSequence=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(40,40,40)),ColorSequenceKeypoint.new(0.5,Color3.fromRGB(105,105,105)),ColorSequenceKeypoint.new(1,Color3.fromRGB(40,40,40))})}, StrokeShine=true, StrokeDark=Color3.fromRGB(40,40,40) },
     ["Deep Violet"] = { Main=Color3.fromRGB(20,20,20), Top=Color3.fromRGB(140,120,160), Text=Color3.fromRGB(240,240,240), Accent=Color3.fromRGB(97,62,167), Stroke=Color3.fromRGB(100,90,110), SubText=Color3.fromRGB(170,170,170), Element=Color3.fromRGB(140,120,160), Hover=Color3.fromRGB(140,120,160), ShineEnabled=true, Shine={Speed=0.5,RotationSpeed=25,ColorSequence=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(40,25,65)),ColorSequenceKeypoint.new(0.5,Color3.fromRGB(160,120,220)),ColorSequenceKeypoint.new(1,Color3.fromRGB(40,25,65))})}, StrokeShine=true, StrokeDark=Color3.fromRGB(110,90,130) },
-    -- ... 其他主题省略以节省篇幅，实际使用时保留全部
-    -- 您可以将原Test.lua中的所有主题复制到这里
+    ["Ash Gray"] = { Main=Color3.fromRGB(60,60,60), Top=Color3.fromRGB(120,120,120), Text=Color3.fromRGB(240,240,240), Accent=Color3.fromRGB(150,150,150), Stroke=Color3.fromRGB(90,90,90), SubText=Color3.fromRGB(170,170,170), Element=Color3.fromRGB(120,120,120), Hover=Color3.fromRGB(120,120,120), ShineEnabled=true, Shine={Speed=0.4,RotationSpeed=20,ColorSequence=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(40,40,40)),ColorSequenceKeypoint.new(0.5,Color3.fromRGB(105,105,105)),ColorSequenceKeypoint.new(1,Color3.fromRGB(40,40,40))})}, StrokeShine=true, StrokeDark=Color3.fromRGB(90,90,90) },
+    ["Charcoal"] = { Main=Color3.fromRGB(20,20,20), Top=Color3.fromRGB(35,35,35), Text=Color3.fromRGB(240,240,240), Accent=Color3.fromRGB(102,102,102), Stroke=Color3.fromRGB(45,45,45), SubText=Color3.fromRGB(170,170,170), Element=Color3.fromRGB(35,35,35), Hover=Color3.fromRGB(90,160,255), ShineEnabled=true, Shine={Speed=0.45,RotationSpeed=25,ColorSequence=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(20,20,20)),ColorSequenceKeypoint.new(0.5,Color3.fromRGB(150,150,150)),ColorSequenceKeypoint.new(1,Color3.fromRGB(20,20,20))})}, StrokeShine=true, StrokeDark=Color3.fromRGB(60,60,60) },
+    ["Pearl White"] = { Main=Color3.fromRGB(240,240,240), Top=Color3.fromRGB(220,220,220), Text=Color3.fromRGB(20,20,20), Accent=Color3.fromRGB(214,214,214), Stroke=Color3.fromRGB(210,210,210), SubText=Color3.fromRGB(90,90,90), Element=Color3.fromRGB(220,220,220), Hover=Color3.fromRGB(60,160,255), ShineEnabled=true, Shine={Speed=0.4,RotationSpeed=20,ColorSequence=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(200,200,200)),ColorSequenceKeypoint.new(0.5,Color3.fromRGB(255,255,255)),ColorSequenceKeypoint.new(1,Color3.fromRGB(200,200,200))})}, StrokeShine=true, StrokeDark=Color3.fromRGB(200,200,200) },
+    ["Blood Red"] = { Main=Color3.fromRGB(35,8,10), Top=Color3.fromRGB(130,12,22), Text=Color3.fromRGB(255,230,230), Accent=Color3.fromRGB(180,10,20), Stroke=Color3.fromRGB(150,18,28), SubText=Color3.fromRGB(210,175,178), Element=Color3.fromRGB(130,12,22), Hover=Color3.fromRGB(180,10,20), ShineEnabled=true, Shine={Speed=0.5,RotationSpeed=25,ColorSequence=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(71,0,0)),ColorSequenceKeypoint.new(0.5,Color3.fromRGB(159,0,0)),ColorSequenceKeypoint.new(1,Color3.fromRGB(71,0,0))})}, StrokeShine=true, StrokeDark=Color3.fromRGB(145,15,25) },
+    ["Neon Purple"] = { Main=Color3.fromRGB(5,0,15), Top=Color3.fromRGB(120,0,210), Text=Color3.fromRGB(252,245,255), Accent=Color3.fromRGB(180,0,255), Stroke=Color3.fromRGB(155,0,245), SubText=Color3.fromRGB(210,185,255), Element=Color3.fromRGB(120,0,210), Hover=Color3.fromRGB(150,0,255), ShineEnabled=true, Shine={Speed=0.4,RotationSpeed=20,ColorSequence=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(32,5,137)),ColorSequenceKeypoint.new(0.5,Color3.fromRGB(171,32,253)),ColorSequenceKeypoint.new(1,Color3.fromRGB(32,5,137))})}, StrokeShine=true, StrokeDark=Color3.fromRGB(60,0,150) },
+    ["Deep Ocean"] = { Main=Color3.fromRGB(15,30,45), Top=Color3.fromRGB(0,90,135), Text=Color3.fromRGB(240,248,255), Accent=Color3.fromRGB(0,150,200), Stroke=Color3.fromRGB(0,110,165), SubText=Color3.fromRGB(180,210,230), Element=Color3.fromRGB(0,90,135), Hover=Color3.fromRGB(0,150,200), ShineEnabled=true, Shine={Speed=0.5,RotationSpeed=25,ColorSequence=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(0,60,90)),ColorSequenceKeypoint.new(0.5,Color3.fromRGB(0,200,255)),ColorSequenceKeypoint.new(1,Color3.fromRGB(0,60,90))})}, StrokeShine=true, StrokeDark=Color3.fromRGB(0,100,150) },
+    ["Midnight Blue"] = { Main=Color3.fromRGB(10,8,25), Top=Color3.fromRGB(55,40,125), Text=Color3.fromRGB(220,220,255), Accent=Color3.fromRGB(100,80,200), Stroke=Color3.fromRGB(70,55,155), SubText=Color3.fromRGB(170,170,210), Element=Color3.fromRGB(55,40,125), Hover=Color3.fromRGB(100,80,200), ShineEnabled=true, Shine={Speed=0.5,RotationSpeed=25,ColorSequence=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(25,15,60)),ColorSequenceKeypoint.new(0.5,Color3.fromRGB(140,120,240)),ColorSequenceKeypoint.new(1,Color3.fromRGB(25,15,60))})}, StrokeShine=true, StrokeDark=Color3.fromRGB(60,45,140) },
+    ["Royal Blue"] = { Main=Color3.fromRGB(10,25,50), Top=Color3.fromRGB(9,58,135), Text=Color3.fromRGB(220,235,255), Accent=Color3.fromRGB(15,82,186), Stroke=Color3.fromRGB(11,70,160), SubText=Color3.fromRGB(170,190,220), Element=Color3.fromRGB(9,58,135), Hover=Color3.fromRGB(15,82,186), ShineEnabled=true, Shine={Speed=0.5,RotationSpeed=25,ColorSequence=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(20,40,85)),ColorSequenceKeypoint.new(0.5,Color3.fromRGB(50,120,230)),ColorSequenceKeypoint.new(1,Color3.fromRGB(20,40,85))})}, StrokeShine=true, StrokeDark=Color3.fromRGB(10,65,150) },
+    ["Galaxy Purple"] = { Main=Color3.fromRGB(12,5,25), Top=Color3.fromRGB(112,40,170), Text=Color3.fromRGB(242,232,255), Accent=Color3.fromRGB(160,60,220), Stroke=Color3.fromRGB(130,50,195), SubText=Color3.fromRGB(200,178,228), Element=Color3.fromRGB(112,40,170), Hover=Color3.fromRGB(160,60,220), ShineEnabled=true, Shine={Speed=0.5,RotationSpeed=25,ColorSequence=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(48,18,85)),ColorSequenceKeypoint.new(0.5,Color3.fromRGB(195,100,255)),ColorSequenceKeypoint.new(1,Color3.fromRGB(48,18,85))})}, StrokeShine=true, StrokeDark=Color3.fromRGB(125,45,190) },
+    ["Cosmic Violet"] = { Main=Color3.fromRGB(12,10,22), Top=Color3.fromRGB(50,34,104), Text=Color3.fromRGB(230,225,245), Accent=Color3.fromRGB(80,60,140), Stroke=Color3.fromRGB(60,42,120), SubText=Color3.fromRGB(185,175,210), Element=Color3.fromRGB(50,34,104), Hover=Color3.fromRGB(80,60,140), ShineEnabled=true, Shine={Speed=0.5,RotationSpeed=25,ColorSequence=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(35,25,65)),ColorSequenceKeypoint.new(0.5,Color3.fromRGB(115,90,175)),ColorSequenceKeypoint.new(1,Color3.fromRGB(35,25,65))})}, StrokeShine=true, StrokeDark=Color3.fromRGB(55,38,115) },
+    ["AMOLED"] = { Main=Color3.fromRGB(0,0,0), Top=Color3.fromRGB(10,10,10), Text=Color3.fromRGB(255,255,255), Accent=Color3.fromRGB(255,255,255), Stroke=Color3.fromRGB(30,30,30), SubText=Color3.fromRGB(150,150,150), Element=Color3.fromRGB(10,10,10), Hover=Color3.fromRGB(22,22,22), ShineEnabled=false, StrokeShine=false, Shine={Speed=0,RotationSpeed=0,ColorSequence=ColorSequence.new(Color3.fromRGB(0,0,0),Color3.fromRGB(0,0,0))}, StrokeDark=Color3.fromRGB(18,18,18) },
+    ["RGB"] = { Main=Color3.fromRGB(8,8,14), Top=Color3.fromRGB(20,20,35), Text=Color3.fromRGB(220,255,245), Accent=Color3.fromRGB(0,255,180), Stroke=Color3.fromRGB(0,200,160), SubText=Color3.fromRGB(100,220,190), Element=Color3.fromRGB(20,20,35), Hover=Color3.fromRGB(0,50,40), ShineEnabled=true, Shine={Speed=1.2,RotationSpeed=40,ColorSequence=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(0,255,180)),ColorSequenceKeypoint.new(0.33,Color3.fromRGB(120,0,255)),ColorSequenceKeypoint.new(0.66,Color3.fromRGB(255,0,150)),ColorSequenceKeypoint.new(1,Color3.fromRGB(0,255,180))})}, StrokeShine=true, StrokeDark=Color3.fromRGB(0,180,140) },
+    ["Neon Cyber"] = { Main=Color3.fromRGB(5,10,5), Top=Color3.fromRGB(10,22,10), Text=Color3.fromRGB(200,255,190), Accent=Color3.fromRGB(57,255,20), Stroke=Color3.fromRGB(35,160,15), SubText=Color3.fromRGB(80,200,60), Element=Color3.fromRGB(10,22,10), Hover=Color3.fromRGB(15,40,15), ShineEnabled=true, Shine={Speed=0.8,RotationSpeed=30,ColorSequence=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(5,30,5)),ColorSequenceKeypoint.new(0.5,Color3.fromRGB(57,255,20)),ColorSequenceKeypoint.new(1,Color3.fromRGB(5,30,5))})}, StrokeShine=true, StrokeDark=Color3.fromRGB(35,160,15) },
+    ["Arctic Frost"] = { Main=Color3.fromRGB(185,215,235), Top=Color3.fromRGB(210,235,250), Text=Color3.fromRGB(20,40,70), Accent=Color3.fromRGB(100,180,240), Stroke=Color3.fromRGB(140,185,218), SubText=Color3.fromRGB(65,105,148), Element=Color3.fromRGB(210,235,250), Hover=Color3.fromRGB(170,210,238), ShineEnabled=true, Shine={Speed=0.3,RotationSpeed=15,ColorSequence=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(200,235,255)),ColorSequenceKeypoint.new(0.5,Color3.fromRGB(255,255,255)),ColorSequenceKeypoint.new(1,Color3.fromRGB(200,235,255))})}, StrokeShine=true, StrokeDark=Color3.fromRGB(170,210,238) },
+    ["Cotton Candy"] = { Main=Color3.fromRGB(255,225,245), Top=Color3.fromRGB(255,200,235), Text=Color3.fromRGB(75,25,55), Accent=Color3.fromRGB(255,130,190), Stroke=Color3.fromRGB(235,170,215), SubText=Color3.fromRGB(145,75,115), Element=Color3.fromRGB(255,200,235), Hover=Color3.fromRGB(238,182,222), ShineEnabled=true, Shine={Speed=0.4,RotationSpeed=18,ColorSequence=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(255,180,220)),ColorSequenceKeypoint.new(0.5,Color3.fromRGB(220,180,255)),ColorSequenceKeypoint.new(1,Color3.fromRGB(255,180,220))})}, StrokeShine=true, StrokeDark=Color3.fromRGB(228,172,213) },
+    ["Orange"] = { Main=Color3.fromRGB(4,4,4), Top=Color3.fromRGB(22,10,2), Text=Color3.fromRGB(255,240,220), Accent=Color3.fromRGB(255,140,30), Stroke=Color3.fromRGB(200,90,10), SubText=Color3.fromRGB(220,175,130), Element=Color3.fromRGB(22,10,2), Hover=Color3.fromRGB(255,140,30), ShineEnabled=true, Shine={Speed=0.7,RotationSpeed=30,ColorSequence=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(30,10,0)),ColorSequenceKeypoint.new(0.5,Color3.fromRGB(255,140,30)),ColorSequenceKeypoint.new(1,Color3.fromRGB(30,10,0))})}, StrokeShine=true, StrokeDark=Color3.fromRGB(180,80,10) },
+    ["Cyanic"] = { Main=Color3.fromRGB(8,18,22), Top=Color3.fromRGB(14,38,46), Text=Color3.fromRGB(210,248,246), Accent=Color3.fromRGB(57,197,187), Stroke=Color3.fromRGB(40,165,160), SubText=Color3.fromRGB(130,210,205), Element=Color3.fromRGB(14,38,46), Hover=Color3.fromRGB(57,197,187), ShineEnabled=true, Shine={Speed=0.6,RotationSpeed=25,ColorSequence=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(10,40,50)),ColorSequenceKeypoint.new(0.5,Color3.fromRGB(57,197,187)),ColorSequenceKeypoint.new(1,Color3.fromRGB(10,40,50))})}, StrokeShine=true, StrokeDark=Color3.fromRGB(35,155,150) },
+    ["Amber Glow"] = { Main=Color3.fromRGB(18,10,4), Top=Color3.fromRGB(38,20,5), Text=Color3.fromRGB(255,245,225), Accent=Color3.fromRGB(255,170,40), Stroke=Color3.fromRGB(200,130,30), SubText=Color3.fromRGB(230,195,145), Element=Color3.fromRGB(38,20,5), Hover=Color3.fromRGB(255,170,40), ShineEnabled=true, Shine={Speed=0.6,RotationSpeed=25,ColorSequence=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(50,22,4)),ColorSequenceKeypoint.new(0.5,Color3.fromRGB(255,170,40)),ColorSequenceKeypoint.new(1,Color3.fromRGB(50,22,4))})}, StrokeShine=true, StrokeDark=Color3.fromRGB(185,120,25) },
+    ["Bloomings"] = { Main=Color3.fromRGB(40,15,30), Top=Color3.fromRGB(55,22,42), Text=Color3.fromRGB(255,240,248), Accent=Color3.fromRGB(255,80,150), Stroke=Color3.fromRGB(200,80,150), SubText=Color3.fromRGB(230,190,215), Element=Color3.fromRGB(55,22,42), Hover=Color3.fromRGB(255,255,255), ShineEnabled=true, Shine={Speed=0.35,RotationSpeed=15,ColorSequence=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(255,70,150)),ColorSequenceKeypoint.new(0.25,Color3.fromRGB(80,255,150)),ColorSequenceKeypoint.new(0.5,Color3.fromRGB(255,255,255)),ColorSequenceKeypoint.new(0.75,Color3.fromRGB(255,50,130)),ColorSequenceKeypoint.new(1,Color3.fromRGB(255,70,150))})}, StrokeShine=true, StrokeDark=Color3.fromRGB(80,30,60) },
+    ["Crimson"] = { Main=Color3.fromRGB(30,6,9), Top=Color3.fromRGB(14,8,14), Text=Color3.fromRGB(255,235,240), Accent=Color3.fromRGB(220,30,60), Stroke=Color3.fromRGB(200,25,55), SubText=Color3.fromRGB(180,100,115), Element=Color3.fromRGB(14,8,14), Hover=Color3.fromRGB(50,12,22), ShineEnabled=true, Shine={Speed=0.4,RotationSpeed=20,ColorSequence=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(80,5,20)),ColorSequenceKeypoint.new(0.5,Color3.fromRGB(220,30,60)),ColorSequenceKeypoint.new(1,Color3.fromRGB(80,5,20))})}, StrokeShine=true, StrokeDark=Color3.fromRGB(70,5,18) },
+    ["Gold"] = { Main=Color3.fromRGB(35,27,12), Top=Color3.fromRGB(70,55,25), Text=Color3.fromRGB(240,240,240), Accent=Color3.fromRGB(255,200,90), Stroke=Color3.fromRGB(80,60,25), SubText=Color3.fromRGB(170,170,170), Element=Color3.fromRGB(70,55,25), Hover=Color3.fromRGB(255,200,90), ShineEnabled=true, Shine={Speed=0.5,RotationSpeed=25,ColorSequence=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(40,30,10)),ColorSequenceKeypoint.new(0.5,Color3.fromRGB(255,210,120)),ColorSequenceKeypoint.new(1,Color3.fromRGB(40,30,10))})}, StrokeShine=true, StrokeDark=Color3.fromRGB(120,90,30) },
 }
-
 local CurrentTheme = Themes.Dark
 
 local function AddToRegistry(obj, prop, key)
@@ -672,10 +340,6 @@ function MediaManager:Image(src)
     end
     return ""
 end
-
--- ====================================================================
---  3. Fenglib 的控件生成器（与原来一致，但使用 ModernV2 的窗口容器）
--- ====================================================================
 
 local function styleContainer(frame)
     frame.BackgroundTransparency = 0.92
@@ -3627,55 +3291,788 @@ local function createSectionBuilder(parent, contentContainer, elementWidth, wind
     return createSection
 end
 
--- ====================================================================
---  4. Fenglib 主函数（创建窗口，使用 ModernV2 框架）
--- ====================================================================
-
 function Fenglib:CreateWindow(Config)
-    Config = Config or {}
-    local Title = Config.Name or "FengWindow"
+    local Window = {}
+    local Title = Config.Name or "FengY3"
     local Subtitle = Config.SubName
     local Keybind = Config.Keybind
-    local IconAsset = Config.Logo or "rbxassetid://78229538488090"
-    local ThemeName = Config.Theme or "Dark"
-    if type(ThemeName)=="string" and Themes[ThemeName] then
-        CurrentTheme = Themes[ThemeName]
+    local IconAsset = Config.Logo
+    local SceneId = Config.Scene or 102597607447167
+
+    Window.RootFolder = Title
+    Window.ConfigFolder = Title.."/Config"
+    Window.CurrentConfig = ""
+
+    if Config.Theme then
+        if type(Config.Theme)=="string" then
+            if Themes[Config.Theme] then CurrentTheme = Themes[Config.Theme] end
+        elseif type(Config.Theme)=="table" then
+            local t = Config.Theme
+            local function toC3(v)
+                if type(v)=="table" then return Color3.fromRGB(v[1] or 0, v[2] or 0, v[3] or 0)
+                elseif type(v)=="userdata" then return v
+                else return Color3.new(0,0,0) end
+            end
+            local customTheme = {}
+            for k, v in pairs(CurrentTheme) do customTheme[k] = v end
+            if t.Main then customTheme.Main = toC3(t.Main) end
+            if t.Top then customTheme.Top = toC3(t.Top) end
+            if t.Text then customTheme.Text = toC3(t.Text) end
+            if t.Accent then customTheme.Accent = toC3(t.Accent) end
+            if t.Stroke then customTheme.Stroke = toC3(t.Stroke) end
+            if t.SubText then customTheme.SubText = toC3(t.SubText) end
+            if t.Element then customTheme.Element = toC3(t.Element) end
+            if t.Hover then customTheme.Hover = toC3(t.Hover) end
+            if t.ShineEnabled ~= nil then customTheme.ShineEnabled = t.ShineEnabled end
+            if t.Shine then customTheme.Shine = t.Shine end
+            if t.StrokeShine ~= nil then customTheme.StrokeShine = t.StrokeShine end
+            if t.StrokeDark then customTheme.StrokeDark = toC3(t.StrokeDark) end
+            local customName = t.Name or "Custom"
+            Themes[customName] = customTheme
+            CurrentTheme = customTheme
+        end
     end
 
-    -- 使用 ModernV2 创建窗口框架
-    local win = ModernV2:CreateWindow({
-        Name = Title,
-        SubName = Subtitle,
-        Keybind = Keybind,
-        Logo = IconAsset,
-        Accent = CurrentTheme.Accent,
-        Main = CurrentTheme.Main,
+    local ScreenGui = Instance.new("ScreenGui")
+    ScreenGui.Name = "FengYu-Bento"
+    ScreenGui.Parent = CoreGui
+    ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    ScreenGui.ScreenInsets = Enum.ScreenInsets.None
+    if syn and syn.protect_gui then syn.protect_gui(ScreenGui) elseif gethui then ScreenGui.Parent = gethui() end
+
+    local NotificationHolder = Instance.new("Frame")
+    NotificationHolder.Name = "NotificationHolder"
+    NotificationHolder.Size = UDim2.new(0,300,0,0)
+    NotificationHolder.AutomaticSize = Enum.AutomaticSize.Y
+    NotificationHolder.Position = UDim2.new(1,-20,1,-20)
+    NotificationHolder.AnchorPoint = Vector2.new(1,1)
+    NotificationHolder.BackgroundTransparency = 1
+    NotificationHolder.BorderSizePixel = 0
+    NotificationHolder.Parent = ScreenGui
+    NotificationHolder.ZIndex = 100
+
+    local HolderList = Instance.new("UIListLayout")
+    HolderList.HorizontalAlignment = Enum.HorizontalAlignment.Right
+    HolderList.VerticalAlignment = Enum.VerticalAlignment.Bottom
+    HolderList.SortOrder = Enum.SortOrder.LayoutOrder
+    HolderList.Padding = UDim.new(0,5)
+    HolderList.Parent = NotificationHolder
+
+    local HolderPadding = Instance.new("UIPadding")
+    HolderPadding.PaddingRight = UDim.new(0,5)
+    HolderPadding.PaddingBottom = UDim.new(0,5)
+    HolderPadding.Parent = NotificationHolder
+
+    local FINAL_WIDTH = 500
+    local FINAL_HEIGHT = 299
+
+    local MainFrame = Instance.new("Frame")
+    MainFrame.Size = UDim2.new(0,0,0,0)
+    MainFrame.Position = UDim2.new(0.5,0,0.5,0)
+    MainFrame.AnchorPoint = Vector2.new(0.5,0.5)
+    MainFrame.ClipsDescendants = true
+    MainFrame.BackgroundTransparency = 0.15
+    MainFrame.Visible = false
+    MainFrame.Parent = ScreenGui
+    Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0,16)
+    AddToRegistry(MainFrame, "BackgroundColor3", "Main")
+
+    local Stroke = Instance.new("UIStroke")
+    Stroke.Thickness = 2
+    Stroke.Parent = MainFrame
+    AddToRegistry(Stroke, "Color", "Stroke")
+
+    local bgImage = Instance.new("ImageLabel")
+    bgImage.Name = "FluentBG"
+    bgImage.Size = UDim2.new(1,0,1,0)
+    bgImage.BackgroundTransparency = 1
+    if type(SceneId)=="number" or (type(SceneId)=="string" and tonumber(SceneId)) then
+        bgImage.Image = "rbxassetid://"..tostring(SceneId)
+    else
+        bgImage.Image = tostring(SceneId)
+    end
+    bgImage.ScaleType = Enum.ScaleType.Crop
+    bgImage.ZIndex = 0
+    bgImage.Parent = MainFrame
+    Instance.new("UICorner", bgImage).CornerRadius = UDim.new(0,16)
+
+    local bgGradient = Instance.new("UIGradient")
+    bgGradient.Rotation = 0
+    bgGradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(180,10,20)),
+        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255,80,80)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(180,10,20))
     })
+    bgGradient.Transparency = NumberSequence.new({
+        NumberSequenceKeypoint.new(0,0.6),
+        NumberSequenceKeypoint.new(0.5,0.0),
+        NumberSequenceKeypoint.new(1,0.6)
+    })
+    bgGradient.Parent = bgImage
 
-    -- 获取窗口的内容容器（右侧区域）
-    local contentContainer = win.ContentContainer
-    -- 获取左侧标签滚动区
-    local leftScroll = win.LeftScroll
+    local animConn = nil
+    if CurrentTheme.ShineEnabled then
+        animConn = Animation.Apply(CurrentTheme, bgImage, true)
+    end
 
-    -- 存储标签信息
-    local tabs = {}
-    local activeTab = nil
+    local Resizer = Instance.new("TextButton")
+    Resizer.Name = "WindowResizer"
+    Resizer.Parent = MainFrame
+    Resizer.BackgroundTransparency = 0.8
+    Resizer.BackgroundColor3 = Color3.new(1,1,1)
+    Resizer.Position = UDim2.new(1, 5, 1, 5)
+    Resizer.Size = UDim2.new(0, 24, 0, 24)
+    Resizer.AnchorPoint = Vector2.new(1, 1)
+    Resizer.Text = ""
+    Resizer.ZIndex = 30
+    Resizer.Visible = false
 
-    -- 重写 Tab 方法
-    function win:Tab(name, icon)
-        local tabBtn = Instance.new("TextButton")
-        tabBtn.Size = UDim2.new(0,140,0,32)
-        tabBtn.BackgroundTransparency = 1
-        tabBtn.BackgroundColor3 = CurrentTheme.Top
-        tabBtn.Text = ""
-        tabBtn.Parent = leftScroll
-        Instance.new("UICorner", tabBtn).CornerRadius = UDim.new(0,10)
+    local resizerStroke = Instance.new("UIStroke")
+    resizerStroke.Thickness = 4
+    resizerStroke.Color = Color3.new(1,1,1)
+    resizerStroke.Transparency = 0
+    resizerStroke.Parent = Resizer
+
+    local resizerCorner = Instance.new("UICorner")
+    resizerCorner.CornerRadius = UDim.new(0, 6)
+    resizerCorner.Parent = Resizer
+
+    local resizerVisible = false
+    local isResizing = false
+    local resizeStart = Vector2.new(0,0)
+    local startSize = UDim2.new(0,0,0,0)
+
+    Resizer.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            isResizing = true
+            resizeStart = input.Position
+            startSize = MainFrame.Size
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if isResizing and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local delta = input.Position - resizeStart
+            local newWidth = math.max(400, startSize.X.Offset + delta.X)
+            local newHeight = math.max(250, startSize.Y.Offset + delta.Y)
+            MainFrame.Size = UDim2.new(0, newWidth, 0, newHeight)
+        end
+    end)
+
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            isResizing = false
+        end
+    end)
+
+    local IntroHolder = Instance.new("Frame")
+    IntroHolder.Size = UDim2.new(1,999999,1,999999)
+    IntroHolder.AnchorPoint = Vector2.new(0.5,0.5)
+    IntroHolder.Position = UDim2.new(0.5,0,0.5,0)
+    IntroHolder.BackgroundColor3 = Color3.fromRGB(230,230,235)
+    IntroHolder.BackgroundTransparency = 1
+    IntroHolder.ZIndex = 50
+    IntroHolder.Parent = ScreenGui
+
+    local function formatIcon(asset)
+        if tonumber(asset) then return "rbxassetid://"..asset
+        elseif type(asset)=="string" and asset:match("^rbxassetid://") then return asset
+        elseif type(asset)=="string" and asset:match("^http") then return asset
+        elseif type(asset)=="string" then return "rbxassetid://"..asset end
+        return "rbxassetid://78229538488090"
+    end
+
+    local IntroLogo = Instance.new("ImageLabel")
+    IntroLogo.Size = UDim2.new(0,0,0,0)
+    IntroLogo.AnchorPoint = Vector2.new(0.5,0.5)
+    IntroLogo.Position = UDim2.new(0.5,0,0.5,-16)
+    IntroLogo.BackgroundTransparency = 1
+    IntroLogo.Image = formatIcon(IconAsset or "78229538488090")
+    IntroLogo.ZIndex = 51
+    IntroLogo.Parent = IntroHolder
+    Instance.new("UICorner", IntroLogo).CornerRadius = UDim.new(1,0)
+
+    local IntroTitle = Instance.new("TextLabel")
+    IntroTitle.Size = UDim2.new(0,0,0,20)
+    IntroTitle.AnchorPoint = Vector2.new(0.5,0.5)
+    IntroTitle.Position = UDim2.new(0.5,0,0.5,40)
+    IntroTitle.BackgroundTransparency = 1
+    IntroTitle.Font = Enum.Font.GothamBold
+    IntroTitle.Text = Title
+    IntroTitle.TextColor3 = Color3.fromRGB(255,255,255)
+    IntroTitle.TextTransparency = 1
+    IntroTitle.TextSize = 20
+    IntroTitle.ZIndex = 51
+    IntroTitle.Parent = IntroHolder
+
+    local IntroSub = Instance.new("TextLabel")
+    IntroSub.Size = UDim2.new(0,0,0,16)
+    IntroSub.AnchorPoint = Vector2.new(0.5,0.5)
+    IntroSub.Position = UDim2.new(0.5,0,0.5,62)
+    IntroSub.BackgroundTransparency = 1
+    IntroSub.Font = Enum.Font.Gotham
+    IntroSub.Text = Subtitle or ""
+    IntroSub.TextColor3 = Color3.fromRGB(200,200,200)
+    IntroSub.TextTransparency = 1
+    IntroSub.TextSize = 16
+    IntroSub.ZIndex = 51
+    IntroSub.Parent = IntroHolder
+
+    TweenService:Create(IntroHolder, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency=0.85}):Play()
+    TweenService:Create(IntroLogo, TweenInfo.new(0.6, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size=UDim2.new(0,82,0,82)}):Play()
+    TweenService:Create(IntroTitle, TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextTransparency=0}):Play()
+    TweenService:Create(IntroSub, TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextTransparency=0}):Play()
+
+    task.wait(1.3)
+    MainFrame.Visible = true
+    TweenService:Create(MainFrame, TweenInfo.new(0.6, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size=UDim2.new(0,FINAL_WIDTH,0,FINAL_HEIGHT)}):Play()
+    TweenService:Create(IntroHolder, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {BackgroundTransparency=1}):Play()
+    TweenService:Create(IntroTitle, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {TextTransparency=1}):Play()
+    TweenService:Create(IntroSub, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {TextTransparency=1}):Play()
+    TweenService:Create(IntroLogo, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Size=UDim2.new(0,0,0,0)}):Play()
+    task.wait(0.35)
+    IntroHolder:Destroy()
+
+    local topbarHeight = Subtitle and 45 or 40
+    local Topbar = Instance.new("Frame")
+    Topbar.Size = UDim2.new(1,0,0,topbarHeight)
+    Topbar.BackgroundTransparency = 1
+    Topbar.Parent = MainFrame
+
+    local TopbarDivider = Instance.new("Frame")
+    TopbarDivider.Name = "TopbarDivider"
+    TopbarDivider.Size = UDim2.new(1,0,0,1)
+    TopbarDivider.Position = UDim2.new(0,0,1,0)
+    TopbarDivider.AnchorPoint = Vector2.new(0,1)
+    TopbarDivider.BackgroundColor3 = CurrentTheme.Stroke
+    TopbarDivider.BackgroundTransparency = 0.5
+    TopbarDivider.BorderSizePixel = 0
+    TopbarDivider.ZIndex = 2
+    TopbarDivider.Parent = Topbar
+    table.insert(ThemeListeners, function() TopbarDivider.BackgroundColor3 = CurrentTheme.Stroke end)
+
+    if IconAsset then
+        if tonumber(IconAsset) then IconAsset = "rbxassetid://"..IconAsset end
+    else IconAsset = "rbxassetid://78229538488090" end
+
+    local Icon = Instance.new("ImageLabel")
+    Icon.Name = "WindowIcon"
+    Icon.Size = UDim2.new(0,32,0,32)
+    Icon.Position = UDim2.new(0,10,0.5,-16)
+    Icon.BackgroundTransparency = 1
+    Icon.Image = IconAsset
+    Icon.Parent = Topbar
+    AddToRegistry(Icon, "ImageColor3", "Text")
+    local iconCorner = Instance.new("UICorner")
+    iconCorner.CornerRadius = UDim.new(0,8)
+    iconCorner.Parent = Icon
+
+    local ButtonGroup = Instance.new("Frame")
+    ButtonGroup.Name = "WindowButtons"
+    ButtonGroup.Size = UDim2.new(0,180,1,0)
+    ButtonGroup.Position = UDim2.new(1,-190,0,0)
+    ButtonGroup.BackgroundTransparency = 1
+    ButtonGroup.Parent = Topbar
+
+    local ButtonLayout = Instance.new("UIListLayout")
+    ButtonLayout.FillDirection = Enum.FillDirection.Horizontal
+    ButtonLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+    ButtonLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    ButtonLayout.Padding = UDim.new(0,5)
+    ButtonLayout.Parent = ButtonGroup
+
+    local ButtonPadding = Instance.new("UIPadding")
+    ButtonPadding.PaddingRight = UDim.new(0,10)
+    ButtonPadding.Parent = ButtonGroup
+
+    local function createControlButton(iconAsset, fallbackText, callback)
+        local btn = Instance.new("TextButton")
+        btn.Size = UDim2.new(0,32,0,32)
+        btn.AutoButtonColor = false
+        btn.Text = ""
+        btn.BackgroundTransparency = 0.2
+        btn.BackgroundColor3 = CurrentTheme.Element or CurrentTheme.Top
+        btn.Parent = ButtonGroup
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0,7)
+        corner.Parent = btn
+        local accent = Instance.new("Frame")
+        accent.Size = UDim2.new(0,0,0,0)
+        accent.AnchorPoint = Vector2.new(0.5,0.5)
+        accent.Position = UDim2.new(0.5,0,0.5,0)
+        accent.BackgroundTransparency = 1
+        accent.ZIndex = 2
+        accent.BackgroundColor3 = CurrentTheme.Accent
+        accent.Parent = btn
+        local accentCorner = Instance.new("UICorner")
+        accentCorner.CornerRadius = UDim.new(0,7)
+        accentCorner.Parent = accent
+        local accentGrad = Instance.new("UIGradient")
+        accentGrad.Rotation = -115
+        accentGrad.Color = ColorSequence.new({ColorSequenceKeypoint.new(0, CurrentTheme.Accent), ColorSequenceKeypoint.new(1, CurrentTheme.Accent)})
+        accentGrad.Parent = accent
+        local content
+        if iconAsset then
+            content = Instance.new("ImageLabel")
+            content.Size = UDim2.new(0,14,0,14)
+            content.AnchorPoint = Vector2.new(0.5,0.5)
+            content.Position = UDim2.new(0.5,0,0.5,0)
+            content.BackgroundTransparency = 1
+            content.Image = iconAsset
+            content.ImageColor3 = CurrentTheme.Text
+            content.ImageTransparency = 0.3
+            content.ZIndex = 3
+            content.Parent = btn
+        else
+            content = Instance.new("TextLabel")
+            content.Size = UDim2.new(1,0,1,0)
+            content.BackgroundTransparency = 1
+            content.Font = Enum.Font.GothamBold
+            content.Text = fallbackText or ""
+            content.TextSize = 18
+            content.TextColor3 = CurrentTheme.Text
+            content.TextTransparency = 0.3
+            content.ZIndex = 3
+            content.Parent = btn
+        end
+        btn.MouseEnter:Connect(function()
+            Tween(btn, {BackgroundTransparency=0}, 0.2)
+            if content then
+                local transProp = content:IsA("ImageLabel") and "ImageTransparency" or "TextTransparency"
+                Tween(content, {[transProp]=0}, 0.2)
+            end
+            Tween(accent, {Size=UDim2.new(1,0,1,0), BackgroundTransparency=0}, 0.2)
+        end)
+        btn.MouseLeave:Connect(function()
+            Tween(btn, {BackgroundTransparency=0.2}, 0.2)
+            if content then
+                local transProp = content:IsA("ImageLabel") and "ImageTransparency" or "TextTransparency"
+                Tween(content, {[transProp]=0.3}, 0.2)
+            end
+            Tween(accent, {Size=UDim2.new(0,0,0,0), BackgroundTransparency=1}, 0.2)
+        end)
+        btn.MouseButton1Click:Connect(callback)
+        table.insert(ThemeListeners, function()
+            btn.BackgroundColor3 = CurrentTheme.Element or CurrentTheme.Top
+            accent.BackgroundColor3 = CurrentTheme.Accent
+            accentGrad.Color = ColorSequence.new({ColorSequenceKeypoint.new(0, CurrentTheme.Accent), ColorSequenceKeypoint.new(1, CurrentTheme.Accent)})
+            if content and content:IsA("ImageLabel") then
+                content.ImageColor3 = CurrentTheme.Text
+            elseif content and content:IsA("TextLabel") then
+                content.TextColor3 = CurrentTheme.Text
+            end
+        end)
+        return btn
+    end
+
+    local MinimizeBtn = createControlButton(nil, "−", function() MainFrame.Visible = false end)
+    local MaximizeBtn = createControlButton("rbxassetid://6031090998", nil, function()
+        resizerVisible = not resizerVisible
+        Resizer.Visible = resizerVisible
+    end)
+    local CloseBtn = createControlButton("rbxassetid://130510492706892", nil, function() ScreenGui:Destroy() end)
+
+    local TitleLabel = Instance.new("TextLabel")
+    TitleLabel.Text = Title
+    TitleLabel.BackgroundTransparency = 1
+    TitleLabel.Font = Enum.Font.GothamBold
+    TitleLabel.TextSize = 16
+    TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    TitleLabel.Parent = Topbar
+    AddToRegistry(TitleLabel, "TextColor3", "Text")
+
+    if Subtitle then
+        TitleLabel.Size = UDim2.new(1,-180,0,20)
+        TitleLabel.Position = UDim2.new(0,50,0,5)
+        local SubtitleLabel = Instance.new("TextLabel")
+        SubtitleLabel.Text = Subtitle
+        SubtitleLabel.Size = UDim2.new(1,-180,0,15)
+        SubtitleLabel.Position = UDim2.new(0,50,0,25)
+        SubtitleLabel.BackgroundTransparency = 1
+        SubtitleLabel.Font = Enum.Font.GothamMedium
+        SubtitleLabel.TextSize = 12
+        SubtitleLabel.TextTransparency = 0.4
+        SubtitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+        SubtitleLabel.Parent = Topbar
+        AddToRegistry(SubtitleLabel, "TextColor3", "Text")
+    else
+        TitleLabel.Size = UDim2.new(1,-180,1,0)
+        TitleLabel.Position = UDim2.new(0,50,0,0)
+    end
+
+    local leftWidth = 160
+    local LeftContainer = Instance.new("Frame")
+    LeftContainer.Size = UDim2.new(0,leftWidth,1,-topbarHeight)
+    LeftContainer.Position = UDim2.new(0,0,0,topbarHeight)
+    LeftContainer.BackgroundTransparency = 1
+    LeftContainer.BackgroundColor3 = CurrentTheme.Main
+    LeftContainer.ClipsDescendants = true
+    LeftContainer.Parent = MainFrame
+    local leftCorner = Instance.new("UICorner")
+    leftCorner.CornerRadius = UDim.new(0,16)
+    leftCorner.Parent = LeftContainer
+
+    local LeftDivider = Instance.new("Frame")
+    LeftDivider.Name = "LeftDivider"
+    LeftDivider.Size = UDim2.new(0, 1, 1, 0)
+    LeftDivider.Position = UDim2.new(1, 0, 0, 0)
+    LeftDivider.AnchorPoint = Vector2.new(1, 0)
+    LeftDivider.BackgroundColor3 = CurrentTheme.Stroke
+    LeftDivider.BackgroundTransparency = 0.5
+    LeftDivider.BorderSizePixel = 0
+    LeftDivider.ZIndex = 2
+    LeftDivider.Parent = LeftContainer
+    table.insert(ThemeListeners, function() LeftDivider.BackgroundColor3 = CurrentTheme.Stroke end)
+
+    local TabScroll = Instance.new("ScrollingFrame")
+    TabScroll.Size = UDim2.new(1,0,1,-55)
+    TabScroll.Position = UDim2.new(0,0,0,0)
+    TabScroll.BackgroundTransparency = 1
+    TabScroll.ScrollBarThickness = 0
+    TabScroll.ScrollingDirection = Enum.ScrollingDirection.Y
+    TabScroll.Parent = LeftContainer
+
+    local TabList = Instance.new("UIListLayout")
+    TabList.Padding = UDim.new(0,4)
+    TabList.SortOrder = Enum.SortOrder.LayoutOrder
+    TabList.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    TabList.Parent = TabScroll
+
+    local function updateTabCanvas()
+        TabScroll.CanvasSize = UDim2.new(0,0,0, TabList.AbsoluteContentSize.Y + 20)
+    end
+    TabList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(updateTabCanvas)
+    task.spawn(updateTabCanvas)
+
+    Window._currentCategory = nil
+
+    function Window:Category(config)
+        local name = type(config)=="table" and config.Name or config
+        local collapsible = type(config)=="table" and config.Collapsible or false
+        local opened = true
+        if type(config)=="table" and config.Opened ~= nil then opened = config.Opened end
+        local categoryFrame = Instance.new("Frame")
+        categoryFrame.Size = UDim2.new(1,0,0,0)
+        categoryFrame.AutomaticSize = Enum.AutomaticSize.Y
+        categoryFrame.BackgroundTransparency = 1
+        categoryFrame.Parent = TabScroll
+        local catLayout = Instance.new("UIListLayout")
+        catLayout.FillDirection = Enum.FillDirection.Vertical
+        catLayout.SortOrder = Enum.SortOrder.LayoutOrder
+        catLayout.Padding = UDim.new(0,0)
+        catLayout.Parent = categoryFrame
+        local header = Instance.new("TextButton")
+        header.Size = UDim2.new(1,0,0,28)
+        header.BackgroundTransparency = 1
+        header.Text = name
+        header.TextXAlignment = Enum.TextXAlignment.Left
+        header.Font = Enum.Font.GothamBold
+        header.TextSize = 13
+        header.TextColor3 = CurrentTheme.Text
+        header.TextTransparency = 0.5
+        header.Parent = categoryFrame
+        local pad = Instance.new("UIPadding")
+        pad.PaddingLeft = UDim.new(0,10)
+        pad.Parent = header
+        AddToRegistry(header, "TextColor3", "Text")
+        local arrow = Instance.new("ImageLabel")
+        arrow.Size = UDim2.new(0,12,0,12)
+        arrow.BackgroundTransparency = 1
+        arrow.Image = "rbxassetid://8240930340"
+        arrow.ImageColor3 = CurrentTheme.Text
+        arrow.ImageTransparency = 0.3
+        arrow.Visible = collapsible
+        arrow.Rotation = opened and 0 or 180
+        arrow.Parent = header
+        arrow.AnchorPoint = Vector2.new(1,0.5)
+        arrow.Position = UDim2.new(1,-10,0.5,0)
+        AddToRegistry(arrow, "ImageColor3", "Text")
+        local content = Instance.new("Frame")
+        content.Size = UDim2.new(1,0,0,0)
+        content.BackgroundTransparency = 1
+        content.AutomaticSize = Enum.AutomaticSize.None
+        content.ClipsDescendants = true
+        content.Visible = true
+        content.Parent = categoryFrame
+        local contentList = Instance.new("UIListLayout")
+        contentList.Padding = UDim.new(0,4)
+        contentList.SortOrder = Enum.SortOrder.LayoutOrder
+        contentList.HorizontalAlignment = Enum.HorizontalAlignment.Center
+        contentList.Parent = content
+        local currentTween = nil
+        local function getContentHeight() return contentList.AbsoluteContentSize.Y or 0 end
+        local function setContentHeight(targetHeight, animate)
+            targetHeight = math.max(0, targetHeight)
+            local currentHeight = content.Size.Y.Offset
+            if animate and currentHeight ~= targetHeight then
+                if currentTween then currentTween:Cancel(); currentTween=nil end
+                currentTween = TweenService:Create(content, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Size=UDim2.new(1,0,0,targetHeight)})
+                currentTween:Play()
+                currentTween.Completed:Connect(function() currentTween=nil; task.spawn(updateTabCanvas) end)
+            else
+                content.Size = UDim2.new(1,0,0,targetHeight)
+                task.spawn(updateTabCanvas)
+            end
+        end
+        local function toggleCategory()
+            if not collapsible then return end
+            opened = not opened
+            Tween(arrow, {Rotation = opened and 0 or 180}, 0.25)
+            local targetHeight = opened and getContentHeight() or 0
+            setContentHeight(targetHeight, true)
+        end
+        header.MouseButton1Click:Connect(toggleCategory)
+        contentList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+            if opened then
+                local h = getContentHeight()
+                if math.abs(h - content.Size.Y.Offset) > 0.5 then setContentHeight(h, false) end
+            end
+        end)
+        task.spawn(function()
+            task.wait()
+            local h = getContentHeight()
+            local initialHeight = opened and h or 0
+            content.Size = UDim2.new(1,0,0,initialHeight)
+            updateTabCanvas()
+        end)
+        Window._currentCategory = {frame=categoryFrame, content=content, contentList=contentList, header=header, label=header, arrow=arrow, collapsible=collapsible, opened=opened, toggle=toggleCategory}
+        table.insert(ThemeListeners, function() header.TextColor3=CurrentTheme.Text; arrow.ImageColor3=CurrentTheme.Text end)
+        return Window._currentCategory
+    end
+
+    function Window:TabDivider()
+        local parentContainer = TabScroll
+        if Window._currentCategory then parentContainer = Window._currentCategory.content end
+        local line = Instance.new("Frame")
+        line.Size = UDim2.new(1,-20,0,1)
+        line.Position = UDim2.new(0,10,0,0)
+        line.BackgroundColor3 = CurrentTheme.Stroke
+        line.BackgroundTransparency = 0.5
+        line.BorderSizePixel = 0
+        line.Parent = parentContainer
+        AddToRegistry(line, "BackgroundColor3", "Stroke")
+        table.insert(ThemeListeners, function() line.BackgroundColor3 = CurrentTheme.Stroke end)
+    end
+
+    local ProfileFrame = Instance.new("Frame")
+    ProfileFrame.Size = UDim2.new(0,140,0,40)
+    ProfileFrame.Position = UDim2.new(0,10,1,-10)
+    ProfileFrame.AnchorPoint = Vector2.new(0,1)
+    ProfileFrame.BackgroundTransparency = 0.05
+    ProfileFrame.Parent = LeftContainer
+    Instance.new("UICorner", ProfileFrame).CornerRadius = UDim.new(0,10)
+    AddToRegistry(ProfileFrame, "BackgroundColor3", "Top")
+
+    local Avatar = Instance.new("ImageLabel")
+    Avatar.Size = UDim2.new(0,26,0,26)
+    Avatar.Position = UDim2.new(0,8,0.5,-13)
+    Avatar.BackgroundColor3 = Color3.fromRGB(20,20,20)
+    Avatar.Image = Players:GetUserThumbnailAsync(LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size48x48)
+    Avatar.Parent = ProfileFrame
+    Instance.new("UICorner", Avatar).CornerRadius = UDim.new(1,0)
+
+    local realDisplayName = LocalPlayer.DisplayName
+    local realUsername = "@"..LocalPlayer.Name
+
+    local DispName = Instance.new("TextLabel")
+    DispName.Text = realDisplayName
+    DispName.Size = UDim2.new(1,-45,0,15)
+    DispName.Position = UDim2.new(0,40,0,5)
+    DispName.BackgroundTransparency = 1
+    DispName.Font = Enum.Font.GothamMedium
+    DispName.TextSize = 11
+    DispName.TextXAlignment = Enum.TextXAlignment.Left
+    DispName.Parent = ProfileFrame
+    AddToRegistry(DispName, "TextColor3", "Text")
+
+    local UsrName = Instance.new("TextLabel")
+    UsrName.Text = realUsername
+    UsrName.Size = UDim2.new(1,-45,0,15)
+    UsrName.Position = UDim2.new(0,40,0,19)
+    UsrName.BackgroundTransparency = 1
+    UsrName.Font = Enum.Font.Gotham
+    UsrName.TextSize = 10
+    UsrName.TextTransparency = 0.5
+    UsrName.TextXAlignment = Enum.TextXAlignment.Left
+    UsrName.Parent = ProfileFrame
+    AddToRegistry(UsrName, "TextColor3", "Text")
+
+    local AnonBtn = Instance.new("TextButton")
+    AnonBtn.Size = UDim2.new(0,18,0,18)
+    AnonBtn.Position = UDim2.new(1,-6,0.5,0)
+    AnonBtn.AnchorPoint = Vector2.new(1,0.5)
+    AnonBtn.BackgroundTransparency = 0.7
+    AnonBtn.Text = ""
+    AnonBtn.Parent = ProfileFrame
+    Instance.new("UICorner", AnonBtn).CornerRadius = UDim.new(1,0)
+    AddToRegistry(AnonBtn, "BackgroundColor3", "Top")
+
+    local EyeIcon = Instance.new("ImageLabel")
+    EyeIcon.Size = UDim2.new(1,0,1,0)
+    EyeIcon.BackgroundTransparency = 1
+    EyeIcon.Image = "rbxassetid://10723346959"
+    EyeIcon.ImageColor3 = CurrentTheme.Text
+    EyeIcon.ImageTransparency = 0.3
+    EyeIcon.Parent = AnonBtn
+    AddToRegistry(EyeIcon, "ImageColor3", "Text")
+
+    local anonActive = false
+    local function setAnon(active)
+        anonActive = active
+        if active then
+            DispName.Text = "脚本杀手"
+            UsrName.Text = "@•••••••"
+            EyeIcon.Image = "rbxassetid://10723346871"
+        else
+            DispName.Text = realDisplayName
+            UsrName.Text = realUsername
+            EyeIcon.Image = "rbxassetid://10723346959"
+        end
+    end
+    AnonBtn.MouseButton1Click:Connect(function() setAnon(not anonActive) end)
+    table.insert(ThemeListeners, function() AnonBtn.BackgroundColor3=CurrentTheme.Top; EyeIcon.ImageColor3=CurrentTheme.Text end)
+
+    -- ========== 右侧主容器（miUI 风格，无配置/搜索，有三按钮） ==========
+    local RightContainer = Instance.new("Frame")
+    RightContainer.Name = "RightContainer"
+    RightContainer.Size = UDim2.new(1, -leftWidth, 1, -topbarHeight)
+    RightContainer.Position = UDim2.new(0, leftWidth, 0, topbarHeight)
+    RightContainer.BackgroundColor3 = CurrentTheme.Main
+    RightContainer.BackgroundTransparency = 0.6
+    RightContainer.ClipsDescendants = true
+    RightContainer.Parent = MainFrame
+    local rightCorner = Instance.new("UICorner")
+    rightCorner.CornerRadius = UDim.new(0, 13)
+    rightCorner.Parent = RightContainer
+    AddToRegistry(RightContainer, "BackgroundColor3", "Main")
+
+    -- 边框
+    local RightStroke = Instance.new("UIStroke")
+    RightStroke.Transparency = 0.65
+    RightStroke.Color = CurrentTheme.Stroke
+    RightStroke.Parent = RightContainer
+    table.insert(ThemeListeners, function() RightStroke.Color = CurrentTheme.Stroke end)
+
+    -- ========== 右侧头部（仅含三个控制按钮） ==========
+    local RightHeader = Instance.new("Frame")
+    RightHeader.Name = "RightHeader"
+    RightHeader.Size = UDim2.new(1, 0, 0, 50)
+    RightHeader.BackgroundTransparency = 1
+    RightHeader.Parent = RightContainer
+
+    -- 分割线
+    local HeaderLine = Instance.new("Frame")
+    HeaderLine.Name = "HeaderLine"
+    HeaderLine.AnchorPoint = Vector2.new(0.5, 1)
+    HeaderLine.Position = UDim2.new(0.5, 0, 1, 0)
+    HeaderLine.Size = UDim2.new(1, -10, 0, 1)
+    HeaderLine.BackgroundColor3 = CurrentTheme.Stroke
+    HeaderLine.BackgroundTransparency = 0.65
+    HeaderLine.BorderSizePixel = 0
+    HeaderLine.Parent = RightHeader
+    table.insert(ThemeListeners, function() HeaderLine.BackgroundColor3 = CurrentTheme.Stroke end)
+
+    -- 按钮容器（靠右排列）
+    local ButtonContainer = Instance.new("Frame")
+    ButtonContainer.Name = "ButtonContainer"
+    ButtonContainer.Size = UDim2.new(0, 120, 1, 0)
+    ButtonContainer.Position = UDim2.new(1, -10, 0.5, 0)
+    ButtonContainer.AnchorPoint = Vector2.new(1, 0.5)
+    ButtonContainer.BackgroundTransparency = 1
+    ButtonContainer.Parent = RightHeader
+
+    local btnLayout = Instance.new("UIListLayout")
+    btnLayout.FillDirection = Enum.FillDirection.Horizontal
+    btnLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+    btnLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    btnLayout.Padding = UDim.new(0, 5)
+    btnLayout.Parent = ButtonContainer
+
+    -- 辅助：创建控制按钮
+    local function createCtrlButton(icon, color, callback)
+        local btn = Instance.new("ImageButton")
+        btn.Size = UDim2.new(0, 30, 0, 30)
+        btn.BackgroundTransparency = 1
+        btn.Image = icon
+        btn.ImageColor3 = color or CurrentTheme.Text
+        btn.ImageTransparency = 0.45
+        btn.Parent = ButtonContainer
+        AddToRegistry(btn, "ImageColor3", "Text")
+        btn.MouseButton1Click:Connect(callback)
+        btn.MouseEnter:Connect(function()
+            Tween(btn, {ImageTransparency = 0.1}, 0.2)
+        end)
+        btn.MouseLeave:Connect(function()
+            Tween(btn, {ImageTransparency = 0.45}, 0.2)
+        end)
+        return btn
+    end
+
+    -- 1. 最小化
+    local minimizeBtn = createCtrlButton("rbxassetid://10734915041", nil, function()
+        MainFrame.Visible = false
+    end)
+
+    -- 2. 最大化/调整大小
+    local maximizeBtn = createCtrlButton("rbxassetid://6031090998", nil, function()
+        resizerVisible = not resizerVisible
+        Resizer.Visible = resizerVisible
+    end)
+
+    -- 3. 关闭（带确认）
+    local closeBtn = createCtrlButton("rbxassetid://130510492706892", nil, function()
+        if Window.Dialog then
+            Window:Dialog({
+                Title = "Close Window",
+                Content = "Are you sure you want to close this window?",
+                Buttons = {
+                    {Text = "Cancel", ReturnValue = false},
+                    {Text = "Yes", Primary = true, ReturnValue = true}
+                },
+                Callback = function(result)
+                    if result then
+                        Window:Destroy()
+                    end
+                end
+            })
+        else
+            Window:Notification("Closing", "Window destroyed", "Info", 1)
+            Window:Destroy()
+        end
+    end)
+
+    -- ========== 标签页内容容器 ==========
+    local TabContainer = Instance.new("Frame")
+    TabContainer.Name = "TabContainer"
+    TabContainer.Size = UDim2.new(1, 0, 1, -50)
+    TabContainer.Position = UDim2.new(0, 0, 0, 50)
+    TabContainer.BackgroundTransparency = 1
+    TabContainer.ClipsDescendants = true
+    TabContainer.Parent = RightContainer
+
+    -- 注意：原 PageContainer 已删除，各 Tab 的 ScrollingFrame 将直接放入 TabContainer
+
+    -- ========== Window:Tab 函数（修改 Page 父级为 TabContainer） ==========
+    function Window:Tab(name, icon)
+        local parentContainer = TabScroll
+        local parentList = TabList
+        if Window._currentCategory then
+            parentContainer = Window._currentCategory.content
+            parentList = Window._currentCategory.contentList
+        end
+        local TabBtn = Instance.new("TextButton")
+        TabBtn.Size = UDim2.new(0,140,0,32)
+        TabBtn.BackgroundTransparency = 1
+        TabBtn.BackgroundColor3 = CurrentTheme.Top
+        TabBtn.Text = ""
+        TabBtn.Parent = parentContainer
+        Instance.new("UICorner", TabBtn).CornerRadius = UDim.new(0,10)
         local glowFrame = Instance.new("Frame")
         glowFrame.Name = "GlowBackground"
         glowFrame.Size = UDim2.new(1,0,1,0)
         glowFrame.BackgroundColor3 = CurrentTheme.Accent
         glowFrame.BackgroundTransparency = 1
-        glowFrame.Parent = tabBtn
+        glowFrame.Parent = TabBtn
         local glowCorner = Instance.new("UICorner")
         glowCorner.CornerRadius = UDim.new(0,10)
         glowCorner.Parent = glowFrame
@@ -3684,82 +4081,82 @@ function Fenglib:CreateWindow(Config)
         glowGrad.Color = ColorSequence.new(CurrentTheme.Accent, CurrentTheme.Accent)
         glowGrad.Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0,0.55), NumberSequenceKeypoint.new(1,1)})
         glowGrad.Parent = glowFrame
-        local tabBar = Instance.new("Frame")
-        tabBar.Size = UDim2.new(0,3,0,0)
-        tabBar.Position = UDim2.new(0,0,0.175,0)
-        tabBar.BackgroundTransparency = 1
-        tabBar.BorderSizePixel = 0
-        tabBar.Parent = tabBtn
-        Instance.new("UICorner", tabBar).CornerRadius = UDim.new(1,0)
-        AddToRegistry(tabBar, "BackgroundColor3", "Accent")
-        local contentFrame = Instance.new("Frame")
-        contentFrame.Name = "ContentFrame"
-        contentFrame.Size = UDim2.new(1,0,1,0)
-        contentFrame.BackgroundTransparency = 1
-        contentFrame.Parent = tabBtn
-        local layout = Instance.new("UIListLayout")
-        layout.FillDirection = Enum.FillDirection.Horizontal
-        layout.HorizontalAlignment = Enum.HorizontalAlignment.Left
-        layout.VerticalAlignment = Enum.VerticalAlignment.Center
-        layout.Padding = UDim.new(0,5)
-        layout.Parent = contentFrame
-        local padding = Instance.new("UIPadding")
-        padding.PaddingLeft = UDim.new(0,10)
-        padding.Parent = contentFrame
+        local TabBar = Instance.new("Frame")
+        TabBar.Size = UDim2.new(0,3,0,0)
+        TabBar.Position = UDim2.new(0,0,0.175,0)
+        TabBar.BackgroundTransparency = 1
+        TabBar.BorderSizePixel = 0
+        TabBar.Parent = TabBtn
+        Instance.new("UICorner", TabBar).CornerRadius = UDim.new(1,0)
+        AddToRegistry(TabBar, "BackgroundColor3", "Accent")
+        local ContentFrame = Instance.new("Frame")
+        ContentFrame.Name = "ContentFrame"
+        ContentFrame.Size = UDim2.new(1,0,1,0)
+        ContentFrame.BackgroundTransparency = 1
+        ContentFrame.Parent = TabBtn
+        local Layout = Instance.new("UIListLayout")
+        Layout.FillDirection = Enum.FillDirection.Horizontal
+        Layout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+        Layout.VerticalAlignment = Enum.VerticalAlignment.Center
+        Layout.Padding = UDim.new(0,5)
+        Layout.Parent = ContentFrame
+        local Padding = Instance.new("UIPadding")
+        Padding.PaddingLeft = UDim.new(0,10)
+        Padding.Parent = ContentFrame
         if icon then
-            local tabIcon = Instance.new("ImageLabel")
-            tabIcon.Size = UDim2.new(0,28,0,28)
-            tabIcon.BackgroundTransparency = 1
-            if tonumber(icon) then tabIcon.Image = "rbxassetid://"..icon else tabIcon.Image = icon end
-            tabIcon.Parent = contentFrame
-            AddToRegistry(tabIcon, "ImageColor3", "Text")
-            Instance.new("UICorner", tabIcon).CornerRadius = UDim.new(0,8)
+            local TabIcon = Instance.new("ImageLabel")
+            TabIcon.Size = UDim2.new(0,28,0,28)
+            TabIcon.BackgroundTransparency = 1
+            if tonumber(icon) then TabIcon.Image = "rbxassetid://"..icon else TabIcon.Image = icon end
+            TabIcon.Parent = ContentFrame
+            AddToRegistry(TabIcon, "ImageColor3", "Text")
+            local iconCorner = Instance.new("UICorner")
+            iconCorner.CornerRadius = UDim.new(0,8)
+            iconCorner.Parent = TabIcon
         end
-        local tabText = Instance.new("TextLabel")
+        local TabText = Instance.new("TextLabel")
         local textWidth = TextService:GetTextSize(name, 14, Enum.Font.GothamMedium, Vector2.new(200,32)).X
-        tabText.Size = UDim2.new(0,textWidth,1,0)
-        tabText.BackgroundTransparency = 1
-        tabText.Font = Enum.Font.GothamMedium
-        tabText.Text = name
-        tabText.TextColor3 = CurrentTheme.Text
-        tabText.TextTransparency = 0.3
-        tabText.TextSize = 14
-        tabText.TextXAlignment = Enum.TextXAlignment.Left
-        tabText.Parent = contentFrame
-        AddToRegistry(tabText, "TextColor3", "Text")
+        TabText.Size = UDim2.new(0,textWidth,1,0)
+        TabText.BackgroundTransparency = 1
+        TabText.Font = Enum.Font.GothamMedium
+        TabText.Text = name
+        TabText.TextColor3 = CurrentTheme.Text
+        TabText.TextTransparency = 0.3
+        TabText.TextSize = 14
+        TabText.TextXAlignment = Enum.TextXAlignment.Left
+        TabText.Parent = ContentFrame
+        AddToRegistry(TabText, "TextColor3", "Text")
 
-        -- 页面容器（在右侧内容区）
-        local page = Instance.new("ScrollingFrame")
-        page.Size = UDim2.new(1,0,1,0)
-        page.BackgroundTransparency = 1
-        page.ScrollBarThickness = 0
-        page.ScrollingEnabled = true
-        page.Visible = false
-        page.Position = UDim2.new(0,0,0,60)
-        page.Parent = contentContainer
+        local Page = Instance.new("ScrollingFrame")
+        Page.Size = UDim2.new(1, 0, 1, 0)
+        Page.BackgroundTransparency = 1
+        Page.ScrollBarThickness = 0
+        Page.ScrollingEnabled = true
+        Page.Visible = false
+        Page.Parent = TabContainer   -- 关键：放入右侧 TabContainer
         local pageCorner = Instance.new("UICorner")
         pageCorner.CornerRadius = UDim.new(0,16)
-        pageCorner.Parent = page
-        page.ClipsDescendants = true
-        local pageContent = Instance.new("Frame")
-        pageContent.Size = UDim2.new(1,0,0,0)
-        pageContent.AutomaticSize = Enum.AutomaticSize.Y
-        pageContent.BackgroundTransparency = 1
-        pageContent.Parent = page
-        local pageList = Instance.new("UIListLayout")
-        pageList.Padding = UDim.new(0,10)
-        pageList.SortOrder = Enum.SortOrder.LayoutOrder
-        pageList.Parent = pageContent
+        pageCorner.Parent = Page
+        Page.ClipsDescendants = true
+        local PageContent = Instance.new("Frame")
+        PageContent.Size = UDim2.new(1,0,0,0)
+        PageContent.AutomaticSize = Enum.AutomaticSize.Y
+        PageContent.BackgroundTransparency = 1
+        PageContent.Parent = Page
+        local PageList = Instance.new("UIListLayout")
+        PageList.Padding = UDim.new(0,10)
+        PageList.SortOrder = Enum.SortOrder.LayoutOrder
+        PageList.Parent = PageContent
         local function updatePageCanvas()
-            page.CanvasSize = UDim2.new(0,0,0, pageList.AbsoluteContentSize.Y + 10)
+            Page.CanvasSize = UDim2.new(0,0,0, PageList.AbsoluteContentSize.Y + 10)
         end
-        pageList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(updatePageCanvas)
+        PageList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(updatePageCanvas)
         task.spawn(updatePageCanvas)
 
-        local state = {isActive=false, btn=tabBtn, page=page, textLabel=tabText, bar=tabBar, glow=glowFrame}
-        tabBtn.MouseButton1Click:Connect(function()
-            if activeTab and activeTab == state then return end
-            for _, s in ipairs(tabs) do
+        local state = {isActive=false, btn=TabBtn, page=Page, textLabel=TabText, bar=TabBar, glow=glowFrame}
+        TabBtn.MouseButton1Click:Connect(function()
+            if Window._activeTab and Window._activeTab == state then return end
+            for _, s in ipairs(Window._tabs) do
                 s.btn.BackgroundTransparency = 1
                 s.isActive = false
                 s.glow.BackgroundTransparency = 1
@@ -3768,33 +4165,44 @@ function Fenglib:CreateWindow(Config)
                 local txt = s.textLabel
                 if txt then Tween(txt, {TextTransparency=0.3}, 0.2) end
             end
-            tabBtn.BackgroundTransparency = 1
+            TabBtn.BackgroundTransparency = 1
             state.isActive = true
             state.glow.BackgroundTransparency = 0
-            if tabBar then Tween(tabBar, {BackgroundTransparency=0, Size=UDim2.new(0,3,0.65,0)}, 0.2) end
-            Tween(tabText, {TextTransparency=0}, 0.2)
-            if activeTab then activeTab.page.Visible = false end
-            page.Visible = true
-            Tween(page, {Position=UDim2.new(0,0,0,0)}, 0.5)
-            activeTab = state
+            if TabBar then Tween(TabBar, {BackgroundTransparency=0, Size=UDim2.new(0,3,0.65,0)}, 0.2) end
+            Tween(TabText, {TextTransparency=0}, 0.2)
+            if Window._activeTab then Window._activeTab.page.Visible = false end
+            Page.Visible = true
+            Tween(Page, {Position=UDim2.new(0,0,0,0)}, 0.5)
+            Window._activeTab = state
         end)
-        if not activeTab then
-            tabBtn.BackgroundTransparency = 1
+        if not Window._activeTab then
+            TabBtn.BackgroundTransparency = 1
             state.isActive = true
             state.glow.BackgroundTransparency = 0
-            tabBar.BackgroundTransparency = 0
-            tabBar.Size = UDim2.new(0,3,0.65,0)
-            tabText.TextTransparency = 0
-            page.Visible = true
-            page.Position = UDim2.new(0,0,0,0)
-            activeTab = state
+            TabBar.BackgroundTransparency = 0
+            TabBar.Size = UDim2.new(0,3,0.65,0)
+            TabText.TextTransparency = 0
+            Page.Visible = true
+            Page.Position = UDim2.new(0,0,0,0)
+            Window._activeTab = state
         end
-        table.insert(tabs, state)
-
-        -- 返回控件生成器
+        table.insert(Window._tabs, state)
+        if name == "Config" then TabBtn.LayoutOrder = 99998 end
+        if name == "Settings" then TabBtn.LayoutOrder = 99999 end
+        table.insert(ThemeListeners, function()
+            for _, s in ipairs(Window._tabs) do
+                local glow = s.glow
+                if glow then
+                    glow.BackgroundColor3 = CurrentTheme.Accent
+                    local grad = glow:FindFirstChildOfClass("UIGradient")
+                    if grad then grad.Color = ColorSequence.new(CurrentTheme.Accent, CurrentTheme.Accent) end
+                end
+                s.btn.BackgroundTransparency = 1
+            end
+        end)
         local getElements = function()
             local elements = {}
-            local createSection = createSectionBuilder(pageContent, pageContent, 330, 1, win)
+            local createSection = createSectionBuilder(PageContent, PageContent, 330, 1, Window)
             elements.Section    = function(_, config) return createSection(config) end
             elements.Button     = function(_, config) return createSection("", nil, true).Button(config) end
             elements.Toggle     = function(_, config) return createSection("", nil, true).Toggle(config) end
@@ -3820,20 +4228,27 @@ function Fenglib:CreateWindow(Config)
         return getElements()
     end
 
-    -- 添加通知快捷方式
-    function win:Notification(title, desc, notifType, duration)
-        local config = {Title=title, Description=desc, Duration=duration or 3, Type=notifType or "Info"}
+    -- 其他原有功能保留（Notification, SetKeybind, Destroy, SetSubtitle 等）
+
+    function Window:Notification(titleText, descText, notifType, duration)
+        notifType = notifType or "Info"
+        duration = duration or 3
+        local config = {Title=titleText, Description=descText, Duration=duration, Type=notifType}
+        local title = config.Title or "Notification"
+        local description = config.Description or ""
+        local totalTime = config.Duration or 3
+        local notifType = config.Type or "Info"
         local typeColors = {Success=Color3.fromRGB(60,179,113), Error=Color3.fromRGB(229,51,51), Info=Color3.fromRGB(77,163,255)}
         local typeIcons = {Success="rbxassetid://120659272678891", Error="rbxassetid://89180847534855", Info="rbxassetid://75441143875602"}
         local closeIcon = "rbxassetid://103624613466093"
-        local accentColor = typeColors[config.Type] or typeColors.Info
+        local accentColor = typeColors[notifType] or typeColors.Info
         local root = Instance.new("Frame")
         root.Name = "NotificationRoot"
         root.Size = UDim2.new(0,0,0,0)
         root.BackgroundTransparency = 1
         root.BorderSizePixel = 0
         root.ClipsDescendants = true
-        root.Parent = win.ScreenGui
+        root.Parent = NotificationHolder
         local main = Instance.new("Frame")
         main.Name = "Main"
         main.Size = UDim2.new(0,250,0,0)
@@ -3872,7 +4287,7 @@ function Fenglib:CreateWindow(Config)
         content.Parent = main
         local icon = Instance.new("ImageLabel")
         icon.Name = "TypeIcon"
-        icon.Image = typeIcons[config.Type]
+        icon.Image = typeIcons[notifType]
         icon.Size = UDim2.new(0,15,0,15)
         icon.Position = UDim2.new(0,-15,0.5,0)
         icon.AnchorPoint = Vector2.new(0.5,0.5)
@@ -3882,7 +4297,7 @@ function Fenglib:CreateWindow(Config)
         icon.Parent = content
         local titleLbl = Instance.new("TextLabel")
         titleLbl.Name = "Title"
-        titleLbl.Text = config.Title
+        titleLbl.Text = title
         titleLbl.Size = UDim2.new(1,0,0,10)
         titleLbl.AutomaticSize = Enum.AutomaticSize.Y
         titleLbl.BackgroundTransparency = 1
@@ -3896,7 +4311,7 @@ function Fenglib:CreateWindow(Config)
         icon.Parent = titleLbl
         local descLbl = Instance.new("TextLabel")
         descLbl.Name = "Description"
-        descLbl.Text = config.Description
+        descLbl.Text = description
         descLbl.Size = UDim2.new(1,0,0,5)
         descLbl.AutomaticSize = Enum.AutomaticSize.Y
         descLbl.BackgroundTransparency = 1
@@ -3946,44 +4361,29 @@ function Fenglib:CreateWindow(Config)
             shrink:Play()
         end
         closeBtn.MouseButton1Click:Connect(destroy)
-        local showTime = math.max(0, config.Duration - 0.3 - 0.25)
+        local showTime = math.max(0, totalTime - 0.3 - 0.25)
         if showTime > 0 then task.delay(showTime, destroy) else task.delay(0.3, destroy) end
     end
 
-    -- 添加主题切换
-    function win:SetTheme(name)
-        if Themes[name] then
-            CurrentTheme = Themes[name]
-            for _, r in pairs(Registry) do
-                if r.Object then Tween(r.Object, {[r.Property] = CurrentTheme[r.Type]}) end
+    function Window:SetKeybind(key) Keybind = key end
+    function Window:Destroy()
+        safeDisconnect(animConn)
+        for _, fn in ipairs(WindowCleanup) do pcall(fn) end
+        ScreenGui:Destroy()
+    end
+    function Window:SetSubtitle(newSubtitle)
+        for _, child in ipairs(Topbar:GetChildren()) do
+            if child:IsA("TextLabel") and child ~= TitleLabel then
+                child.Text = newSubtitle
+                break
             end
-            for _, fn in pairs(ThemeListeners) do pcall(fn) end
-            -- 更新窗口主色
-            win.Frame.BackgroundColor3 = CurrentTheme.Main
-            win.Frame:FindFirstChild("RightMenu") and (function()
-                local right = win.Frame:FindFirstChild("RightMenu")
-                if right then right.BackgroundColor3 = CurrentTheme.Main end
-            end)()
         end
     end
 
-    -- 销毁清理
-    local origDestroy = win.Destroy
-    function win:Destroy()
-        safeDisconnect(animConn)
-        for _, fn in ipairs(WindowCleanup) do pcall(fn) end
-        origDestroy(self)
-    end
-
-    -- 重设启动显示
-    win:SetVisible(true)
-
-    return win
+    -- 窗口默认显示
+    MainFrame.Visible = true
+    return Window
 end
-
--- ====================================================================
---  5. 自定义光标（原样保留）
--- ====================================================================
 
 do
     local cursorScreen = Instance.new("ScreenGui")
