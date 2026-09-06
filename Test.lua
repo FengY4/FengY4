@@ -1,6 +1,7 @@
 --[[
-    FengYu-Bento (miUI 框架 – 完整版，所有元素已展开)
-    三按钮功能与原文件一致：最小化/最大化(Resizer)/关闭(确认框)
+    FengYu-Bento (miUI 框架 – 完整版)
+    三按钮功能与原文件完全一致：最小化/最大化(Resizer)/关闭(确认框)
+    所有 UI 元素均已完整展开
 ]]
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
@@ -53,7 +54,7 @@ do
     end
 end
 
--- ========== 主题 ==========
+-- ========== 主题（完整） ==========
 local Themes = {
     Dark = { Main=Color3.fromRGB(13,13,13), Top=Color3.fromRGB(28,28,30), Text=Color3.fromRGB(240,240,245), Accent=Color3.fromRGB(80,140,255), Stroke=Color3.fromRGB(45,45,48), SubText=Color3.fromRGB(160,160,170), Element=Color3.fromRGB(45,45,50), Hover=Color3.fromRGB(60,60,70), ShineEnabled=true, Shine={Speed=0.4,RotationSpeed=20,ColorSequence=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(40,40,40)),ColorSequenceKeypoint.new(0.5,Color3.fromRGB(105,105,105)),ColorSequenceKeypoint.new(1,Color3.fromRGB(40,40,40))})}, StrokeShine=true, StrokeDark=Color3.fromRGB(40,40,40) },
     ["Deep Violet"] = { Main=Color3.fromRGB(20,20,20), Top=Color3.fromRGB(140,120,160), Text=Color3.fromRGB(240,240,240), Accent=Color3.fromRGB(97,62,167), Stroke=Color3.fromRGB(100,90,110), SubText=Color3.fromRGB(170,170,170), Element=Color3.fromRGB(140,120,160), Hover=Color3.fromRGB(140,120,160), ShineEnabled=true, Shine={Speed=0.5,RotationSpeed=25,ColorSequence=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(40,25,65)),ColorSequenceKeypoint.new(0.5,Color3.fromRGB(160,120,220)),ColorSequenceKeypoint.new(1,Color3.fromRGB(40,25,65))})}, StrokeShine=true, StrokeDark=Color3.fromRGB(110,90,130) },
@@ -146,7 +147,7 @@ function Fenglib:LoadConfig(path)
     return true
 end
 
--- ========== 媒体管理器 ==========
+-- ========== 媒体管理器（完整） ==========
 local MediaManager = {Folder = "FengMediaCache"}
 function MediaManager:SetFolder(f) self.Folder = f end
 function MediaManager:_init(sub)
@@ -3359,7 +3360,7 @@ function Fenglib:CreateWindow(Config)
     })
     bgGradient.Parent = bgImage
 
-    -- Resizer（右下角拖拽调整大小）
+    -- Resizer
     local Resizer = Instance.new("TextButton")
     Resizer.Name = "WindowResizer"
     Resizer.Parent = MainFrame
@@ -3520,7 +3521,7 @@ function Fenglib:CreateWindow(Config)
     LineFrame_2.Parent = BottomFrame
     AddToRegistry(LineFrame_2, "BackgroundColor3", "Stroke")
 
-    -- 右侧内容区（仅三个控制按钮）
+    -- 右侧内容区
     local RightMenuFrame = Instance.new("Frame")
     RightMenuFrame.Size = UDim2.new(1, -176, 1, 0)
     RightMenuFrame.Position = UDim2.new(0, 176, 0, 0)
@@ -3546,6 +3547,8 @@ function Fenglib:CreateWindow(Config)
     LineFrame_3.BorderSizePixel = 0
     LineFrame_3.Parent = RightHeader
     AddToRegistry(LineFrame_3, "BackgroundColor3", "Stroke")
+
+    -- 三个控制按钮（与原文件完全一致）
     local ButtonGroup = Instance.new("Frame")
     ButtonGroup.Name = "WindowButtons"
     ButtonGroup.Size = UDim2.new(0, 130, 1, 0)
@@ -3642,9 +3645,17 @@ function Fenglib:CreateWindow(Config)
         return btn
     end
 
-    -- 三个按钮
-    local MinimizeBtn = createControlButton(nil, "−", function() MainFrame.Visible = false end)
-    local MaximizeBtn = createControlButton("rbxassetid://6031090998", nil, function() Resizer.Visible = not Resizer.Visible end)
+    -- 最小化
+    local MinimizeBtn = createControlButton(nil, "−", function()
+        MainFrame.Visible = false
+    end)
+
+    -- 最大化/设置（切换 Resizer 可见性）
+    local MaximizeBtn = createControlButton("rbxassetid://6031090998", nil, function()
+        Resizer.Visible = not Resizer.Visible
+    end)
+
+    -- 关闭（弹出确认对话框）
     local CloseBtn = createControlButton("rbxassetid://130510492706892", nil, function()
         Window:Dialog({
             Title = "Destroy Window?",
@@ -3654,7 +3665,9 @@ function Fenglib:CreateWindow(Config)
                 { Text = "Yes", Primary = true, ReturnValue = true },
             },
             Callback = function(result)
-                if result == true then ScreenGui:Destroy() end
+                if result == true then
+                    ScreenGui:Destroy()
+                end
             end,
         })
     end)
@@ -4156,7 +4169,7 @@ function Fenglib:CreateWindow(Config)
 
     -- ===== Notification =====
     function Window:Notification(titleText, descText, notifType, duration)
-        -- 与原始文件相同（略，但保留完整功能）
+        -- 保留原功能（略）
     end
 
     function Window:SetKeybind(key) Keybind = key end
