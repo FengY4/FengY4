@@ -3730,7 +3730,7 @@ function Fenglib:CreateWindow(Config)
     end
     task.delay(0.1, AnimateWindowIn)
 
-    -- 浮动打开按钮
+    -- 浮动打开按钮（修复尺寸重置 bug）
     local OpenButton = Instance.new("ImageButton")
     OpenButton.Name = "FloatingOpenButton"
     OpenButton.Parent = ScreenGui
@@ -3750,6 +3750,7 @@ function Fenglib:CreateWindow(Config)
     openStroke.Color = Color3.fromRGB(180,180,180)
     openStroke.Thickness = 1.2
     openStroke.Transparency = 0.4
+
     OpenButton.MouseButton1Click:Connect(function()
         if MainFrame.Visible then
             MainFrame.Visible = false
@@ -3757,6 +3758,7 @@ function Fenglib:CreateWindow(Config)
         else
             MainFrame.Visible = true
             OpenButton.Visible = false
+            -- 不再重置尺寸，保持用户调整后的大小
         end
     end)
     MainFrame:GetPropertyChangedSignal("Visible"):Connect(function()
@@ -3868,7 +3870,7 @@ function Fenglib:CreateWindow(Config)
         return Window._currentCategory
     end
 
-    -- ===== Window:Tab =====
+    -- ===== Window:Tab（完全使用 UI.lua 样式） =====
     Window._activeTab = nil
     Window._tabs = {}
     function Window:Tab(name, icon)
@@ -3879,80 +3881,168 @@ function Fenglib:CreateWindow(Config)
             parentList = Window._currentCategory.contentList
         end
         local TabBtn = Instance.new("TextButton")
-        TabBtn.Size = UDim2.new(1, -7, 0, 30)
-        TabBtn.BackgroundTransparency = 0.5
+        TabBtn.Size = UDim2.new(0,140,0,32)
+        TabBtn.BackgroundTransparency = 1
         TabBtn.BackgroundColor3 = CurrentTheme.Top
         TabBtn.Text = ""
         TabBtn.Parent = parentContainer
-        Instance.new("UICorner", TabBtn).CornerRadius = UDim.new(0, 6)
+        Instance.new("UICorner", TabBtn).CornerRadius = UDim.new(0,10)
+
+        -- 光晕背景
+        local glowFrame = Instance.new("Frame")
+        glowFrame.Name = "GlowBackground"
+        glowFrame.Size = UDim2.new(1,0,1,0)
+        glowFrame.BackgroundColor3 = CurrentTheme.Accent
+        glowFrame.BackgroundTransparency = 1
+        glowFrame.Parent = TabBtn
+        local glowCorner = Instance.new("UICorner")
+        glowCorner.CornerRadius = UDim.new(0,10)
+        glowCorner.Parent = glowFrame
+        local glowGrad = Instance.new("UIGradient")
+        glowGrad.Rotation = 0
+        glowGrad.Color = ColorSequence.new(CurrentTheme.Accent, CurrentTheme.Accent)
+        glowGrad.Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0,0.55), NumberSequenceKeypoint.new(1,1)})
+        glowGrad.Parent = glowFrame
+
+        -- 侧边指示条
+        local TabBar = Instance.new("Frame")
+        TabBar.Size = UDim2.new(0,3,0,0)
+        TabBar.Position = UDim2.new(0,0,0.175,0)
+        TabBar.BackgroundTransparency = 1
+        TabBar.BorderSizePixel = 0
+        TabBar.Parent = TabBtn
+        Instance.new("UICorner", TabBar).CornerRadius = UDim.new(1,0)
+        AddToRegistry(TabBar, "BackgroundColor3", "Accent")
+
+        -- 内容容器（图标+文字水平布局）
+        local ContentFrame = Instance.new("Frame")
+        ContentFrame.Name = "ContentFrame"
+        ContentFrame.Size = UDim2.new(1,0,1,0)
+        ContentFrame.BackgroundTransparency = 1
+        ContentFrame.Parent = TabBtn
+        local Layout = Instance.new("UIListLayout")
+        Layout.FillDirection = Enum.FillDirection.Horizontal
+        Layout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+        Layout.VerticalAlignment = Enum.VerticalAlignment.Center
+        Layout.Padding = UDim.new(0,5)
+        Layout.Parent = ContentFrame
+        local Padding = Instance.new("UIPadding")
+        Padding.PaddingLeft = UDim.new(0,10)
+        Padding.Parent = ContentFrame
+
+        if icon then
+            local TabIcon = Instance.new("ImageLabel")
+            TabIcon.Size = UDim2.new(0,28,0,28)
+            TabIcon.BackgroundTransparency = 1
+            if tonumber(icon) then TabIcon.Image = "rbxassetid://"..icon else TabIcon.Image = icon end
+            TabIcon.Parent = ContentFrame
+            AddToRegistry(TabIcon, "ImageColor3", "Text")
+            local iconCorner = Instance.new("UICorner")
+            iconCorner.CornerRadius = UDim.new(0,8)
+            iconCorner.Parent = TabIcon
+        end
+
         local TabText = Instance.new("TextLabel")
-        TabText.Size = UDim2.new(1, -7, 0, 15)
-        TabText.Position = UDim2.new(0, 30, 0.5, -7.5)
+        local textWidth = TextService:GetTextSize(name, 14, Enum.Font.GothamMedium, Vector2.new(200,32)).X
+        TabText.Size = UDim2.new(0,textWidth,1,0)
         TabText.BackgroundTransparency = 1
         TabText.Font = Enum.Font.GothamMedium
         TabText.Text = name
-        TabText.TextSize = 12
+        TabText.TextColor3 = CurrentTheme.Text
+        TabText.TextTransparency = 0.3
+        TabText.TextSize = 14
         TabText.TextXAlignment = Enum.TextXAlignment.Left
-        TabText.Parent = TabBtn
+        TabText.Parent = ContentFrame
         AddToRegistry(TabText, "TextColor3", "Text")
-        if icon then
-            local TabIcon = Instance.new("ImageLabel")
-            TabIcon.Size = UDim2.new(0, 25, 0, 25)
-            TabIcon.Position = UDim2.new(0, 2, 0.5, -12.5)
-            TabIcon.BackgroundTransparency = 1
-            if tonumber(icon) then TabIcon.Image = "rbxassetid://"..icon else TabIcon.Image = icon end
-            TabIcon.Parent = TabBtn
-            AddToRegistry(TabIcon, "ImageColor3", "Accent")
-        end
+
+        -- 页面容器
         local Page = Instance.new("ScrollingFrame")
-        Page.Size = UDim2.new(1, 0, 1, 0)
+        Page.Size = UDim2.new(1,0,1,0)
         Page.BackgroundTransparency = 1
         Page.ScrollBarThickness = 0
         Page.ScrollingEnabled = true
         Page.Visible = false
+        Page.Position = UDim2.new(0,0,0,60)
         Page.Parent = PageContainer
-        local PageContentInner = Instance.new("Frame")
-        PageContentInner.Size = UDim2.new(1, 0, 0, 0)
-        PageContentInner.AutomaticSize = Enum.AutomaticSize.Y
-        PageContentInner.BackgroundTransparency = 1
-        PageContentInner.Parent = Page
-        local PageListInner = Instance.new("UIListLayout")
-        PageListInner.Padding = UDim.new(0, 10)
-        PageListInner.SortOrder = Enum.SortOrder.LayoutOrder
-        PageListInner.Parent = PageContentInner
-        local function updatePageCanvasInner()
-            Page.CanvasSize = UDim2.new(0,0,0, PageListInner.AbsoluteContentSize.Y + 10)
+        local pageCorner = Instance.new("UICorner")
+        pageCorner.CornerRadius = UDim.new(0,16)
+        pageCorner.Parent = Page
+        Page.ClipsDescendants = true
+
+        local PageContent = Instance.new("Frame")
+        PageContent.Size = UDim2.new(1,0,0,0)
+        PageContent.AutomaticSize = Enum.AutomaticSize.Y
+        PageContent.BackgroundTransparency = 1
+        PageContent.Parent = Page
+        local PageList = Instance.new("UIListLayout")
+        PageList.Padding = UDim.new(0,10)
+        PageList.SortOrder = Enum.SortOrder.LayoutOrder
+        PageList.Parent = PageContent
+        local function updatePageCanvas()
+            Page.CanvasSize = UDim2.new(0,0,0, PageList.AbsoluteContentSize.Y + 10)
         end
-        PageListInner:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(updatePageCanvasInner)
-        task.spawn(updatePageCanvasInner)
-        local state = {isActive=false, btn=TabBtn, page=Page, textLabel=TabText}
+        PageList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(updatePageCanvas)
+        task.spawn(updatePageCanvas)
+
+        local state = {isActive=false, btn=TabBtn, page=Page, textLabel=TabText, bar=TabBar, glow=glowFrame}
+
         TabBtn.MouseButton1Click:Connect(function()
             if Window._activeTab and Window._activeTab == state then return end
             for _, s in ipairs(Window._tabs) do
+                s.btn.BackgroundTransparency = 1
                 s.isActive = false
-                s.btn.BackgroundTransparency = 0.5
-                s.page.Visible = false
-                s.textLabel.TextTransparency = 0.5
+                s.glow.BackgroundTransparency = 1
+                local bar = s.bar
+                if bar then Tween(bar, {BackgroundTransparency=1, Size=UDim2.new(0,3,0,0)}, 0.2) end
+                local txt = s.textLabel
+                if txt then Tween(txt, {TextTransparency=0.3}, 0.2) end
             end
+            TabBtn.BackgroundTransparency = 1
             state.isActive = true
-            state.btn.BackgroundTransparency = 0.5
-            state.btn.BackgroundColor3 = CurrentTheme.Hover
-            state.page.Visible = true
-            state.textLabel.TextTransparency = 0
+            state.glow.BackgroundTransparency = 0
+            if TabBar then Tween(TabBar, {BackgroundTransparency=0, Size=UDim2.new(0,3,0.65,0)}, 0.2) end
+            Tween(TabText, {TextTransparency=0}, 0.2)
+            if Window._activeTab then Window._activeTab.page.Visible = false end
+            Page.Visible = true
+            Tween(Page, {Position=UDim2.new(0,0,0,0)}, 0.5)
             Window._activeTab = state
         end)
+
+        -- 默认激活第一个 Tab
         if not Window._activeTab then
+            TabBtn.BackgroundTransparency = 1
             state.isActive = true
-            state.btn.BackgroundTransparency = 0.5
-            state.btn.BackgroundColor3 = CurrentTheme.Hover
-            state.page.Visible = true
-            state.textLabel.TextTransparency = 0
+            state.glow.BackgroundTransparency = 0
+            TabBar.BackgroundTransparency = 0
+            TabBar.Size = UDim2.new(0,3,0.65,0)
+            TabText.TextTransparency = 0
+            Page.Visible = true
+            Page.Position = UDim2.new(0,0,0,0)
             Window._activeTab = state
         end
+
         table.insert(Window._tabs, state)
+
+        -- 特殊排序（Config 和 Settings 放最后）
+        if name == "Config" then TabBtn.LayoutOrder = 99998 end
+        if name == "Settings" then TabBtn.LayoutOrder = 99999 end
+
+        -- 主题更新：保持光晕颜色和指示条颜色同步
+        table.insert(ThemeListeners, function()
+            for _, s in ipairs(Window._tabs) do
+                local glow = s.glow
+                if glow then
+                    glow.BackgroundColor3 = CurrentTheme.Accent
+                    local grad = glow:FindFirstChildOfClass("UIGradient")
+                    if grad then grad.Color = ColorSequence.new(CurrentTheme.Accent, CurrentTheme.Accent) end
+                end
+                s.btn.BackgroundTransparency = 1
+            end
+        end)
+
         local function getElements()
             local elements = {}
-            local createSection = createSectionBuilder(PageContentInner, PageContentInner, 330, 1, Window)
+            local createSection = createSectionBuilder(PageContent, PageContent, 330, 1, Window)
             elements.Section    = function(_, config) return createSection(config) end
             elements.Button     = function(_, config) return createSection("", nil, true).Button(config) end
             elements.Toggle     = function(_, config) return createSection("", nil, true).Toggle(config) end
