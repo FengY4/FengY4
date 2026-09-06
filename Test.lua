@@ -3905,10 +3905,10 @@ function Fenglib:CreateWindow(Config)
         glowGrad.Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0, 0.55), NumberSequenceKeypoint.new(1, 1)})
         glowGrad.Parent = glowFrame
 
-        -- 侧边指示条（位置微调适配高度30）
+        -- 侧边指示条（位置调整：下移到居中并略偏下）
         local TabBar = Instance.new("Frame")
         TabBar.Size = UDim2.new(0, 3, 0, 0)
-        TabBar.Position = UDim2.new(0, 0, 0.1, 0)
+        TabBar.Position = UDim2.new(0, 0, 0.2, 0)   -- 改为 0.2 使其下移
         TabBar.BackgroundTransparency = 1
         TabBar.BorderSizePixel = 0
         TabBar.Parent = TabBtn
@@ -3944,8 +3944,6 @@ function Fenglib:CreateWindow(Config)
         end
 
         local TabText = Instance.new("TextLabel")
-        -- 修改为填充宽度，但保留自动大小以根据文字内容自适应（同时保持左对齐）
-        -- 可使用自动大小，但为了确保文字不溢出，设置 Size 为 (1,-40,0,15)，并允许自动调整宽度
         TabText.Size = UDim2.new(1, -40, 0, 15)
         TabText.BackgroundTransparency = 1
         TabText.Font = Enum.Font.GothamMedium
@@ -3957,7 +3955,7 @@ function Fenglib:CreateWindow(Config)
         TabText.Parent = ContentFrame
         AddToRegistry(TabText, "TextColor3", "Text")
 
-        -- 页面容器（保持不变）
+        -- 页面容器
         local Page = Instance.new("ScrollingFrame")
         Page.Size = UDim2.new(1, 0, 1, 0)
         Page.BackgroundTransparency = 1
