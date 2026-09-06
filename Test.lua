@@ -8,6 +8,7 @@
       - 窗口背景渐变（UIGradient）
       - 动态描边透明度跟随主题
       - 窗口大小固定为 500×320
+      - 背景图默认为空（不显示任何图片）
 ]]
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
@@ -3262,7 +3263,7 @@ function Fenglib:CreateWindow(Config)
     local Subtitle = Config.SubName
     local Keybind = Config.Keybind
     local IconAsset = Config.Logo
-    local SceneId = Config.Scene or 102597607447167
+    local SceneId = Config.Scene  -- [MOD] 不设默认值，让背景图为空
 
     if Config.Theme then
         if type(Config.Theme)=="string" then
@@ -3359,20 +3360,27 @@ function Fenglib:CreateWindow(Config)
     })
     bgGradient.Parent = MainFrame
 
-    -- [MOD] 背景图（保留，但放在渐变下层）
+    -- [MOD] 背景图：默认为空，仅当 SceneId 存在时设置图片
     local bgImage = Instance.new("ImageLabel")
     bgImage.Name = "FluentBG"
     bgImage.Size = UDim2.new(1,0,1,0)
     bgImage.BackgroundTransparency = 1
-    if type(SceneId)=="number" or (type(SceneId)=="string" and tonumber(SceneId)) then
-        bgImage.Image = "rbxassetid://"..tostring(SceneId)
-    else
-        bgImage.Image = tostring(SceneId)
-    end
-    bgImage.ScaleType = Enum.ScaleType.Crop
     bgImage.ZIndex = 0
     bgImage.Parent = MainFrame
     Instance.new("UICorner", bgImage).CornerRadius = UDim.new(0,12)
+
+    if SceneId then
+        if type(SceneId)=="number" or (type(SceneId)=="string" and tonumber(SceneId)) then
+            bgImage.Image = "rbxassetid://"..tostring(SceneId)
+        else
+            bgImage.Image = tostring(SceneId)
+        end
+    else
+        bgImage.Image = ""  -- 空，不显示任何图片
+        bgImage.Visible = false  -- 可选：完全隐藏，但保留实例
+        -- 若保留但不可见，可维持透明度为1
+        bgImage.BackgroundTransparency = 1
+    end
 
     -- Resizer
     local Resizer = Instance.new("TextButton")
