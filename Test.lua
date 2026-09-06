@@ -3548,19 +3548,23 @@ function Fenglib:CreateWindow(Config)
     LineFrame_3.Parent = RightHeader
     AddToRegistry(LineFrame_3, "BackgroundColor3", "Stroke")
 
-    -- 三个控制按钮（与原文件完全一致）
+    -- ===== 三按钮（完全取自 UI.lua） =====
+    local resizerVisible = false  -- 新增状态变量
+
     local ButtonGroup = Instance.new("Frame")
     ButtonGroup.Name = "WindowButtons"
-    ButtonGroup.Size = UDim2.new(0, 130, 1, 0)
-    ButtonGroup.Position = UDim2.new(1, -140, 0, 0)
+    ButtonGroup.Size = UDim2.new(0, 180, 1, 0)
+    ButtonGroup.Position = UDim2.new(1, -190, 0, 0)
     ButtonGroup.BackgroundTransparency = 1
-    ButtonGroup.Parent = RightHeader
+    ButtonGroup.Parent = RightHeader  -- 与 Test.lua 原有父级一致
+
     local ButtonLayout = Instance.new("UIListLayout")
     ButtonLayout.FillDirection = Enum.FillDirection.Horizontal
     ButtonLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
     ButtonLayout.VerticalAlignment = Enum.VerticalAlignment.Center
     ButtonLayout.Padding = UDim.new(0, 5)
     ButtonLayout.Parent = ButtonGroup
+
     local ButtonPadding = Instance.new("UIPadding")
     ButtonPadding.PaddingRight = UDim.new(0, 10)
     ButtonPadding.Parent = ButtonGroup
@@ -3577,26 +3581,26 @@ function Fenglib:CreateWindow(Config)
         corner.CornerRadius = UDim.new(0, 7)
         corner.Parent = btn
         local accent = Instance.new("Frame")
-        accent.Size = UDim2.new(0,0,0,0)
-        accent.AnchorPoint = Vector2.new(0.5,0.5)
-        accent.Position = UDim2.new(0.5,0,0.5,0)
+        accent.Size = UDim2.new(0, 0, 0, 0)
+        accent.AnchorPoint = Vector2.new(0.5, 0.5)
+        accent.Position = UDim2.new(0.5, 0, 0.5, 0)
         accent.BackgroundTransparency = 1
         accent.ZIndex = 2
         accent.BackgroundColor3 = CurrentTheme.Accent
         accent.Parent = btn
         local accentCorner = Instance.new("UICorner")
-        accentCorner.CornerRadius = UDim.new(0,7)
+        accentCorner.CornerRadius = UDim.new(0, 7)
         accentCorner.Parent = accent
         local accentGrad = Instance.new("UIGradient")
         accentGrad.Rotation = -115
-        accentGrad.Color = ColorSequence.new({ColorSequenceKeypoint.new(0, CurrentTheme.Accent), ColorSequenceKeypoint.new(1, CurrentTheme.Accent)})
+        accentGrad.Color = ColorSequence.new({ ColorSequenceKeypoint.new(0, CurrentTheme.Accent), ColorSequenceKeypoint.new(1, CurrentTheme.Accent) })
         accentGrad.Parent = accent
         local content
         if iconAsset then
             content = Instance.new("ImageLabel")
-            content.Size = UDim2.new(0,14,0,14)
-            content.AnchorPoint = Vector2.new(0.5,0.5)
-            content.Position = UDim2.new(0.5,0,0.5,0)
+            content.Size = UDim2.new(0, 14, 0, 14)
+            content.AnchorPoint = Vector2.new(0.5, 0.5)
+            content.Position = UDim2.new(0.5, 0, 0.5, 0)
             content.BackgroundTransparency = 1
             content.Image = iconAsset
             content.ImageColor3 = CurrentTheme.Text
@@ -3605,7 +3609,7 @@ function Fenglib:CreateWindow(Config)
             content.Parent = btn
         else
             content = Instance.new("TextLabel")
-            content.Size = UDim2.new(1,0,1,0)
+            content.Size = UDim2.new(1, 0, 1, 0)
             content.BackgroundTransparency = 1
             content.Font = Enum.Font.GothamBold
             content.Text = fallbackText or ""
@@ -3616,26 +3620,26 @@ function Fenglib:CreateWindow(Config)
             content.Parent = btn
         end
         btn.MouseEnter:Connect(function()
-            Tween(btn, {BackgroundTransparency=0}, 0.2)
+            Tween(btn, { BackgroundTransparency = 0 }, 0.2)
             if content then
                 local transProp = content:IsA("ImageLabel") and "ImageTransparency" or "TextTransparency"
-                Tween(content, {[transProp]=0}, 0.2)
+                Tween(content, { [transProp] = 0 }, 0.2)
             end
-            Tween(accent, {Size=UDim2.new(1,0,1,0), BackgroundTransparency=0}, 0.2)
+            Tween(accent, { Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 0 }, 0.2)
         end)
         btn.MouseLeave:Connect(function()
-            Tween(btn, {BackgroundTransparency=0.2}, 0.2)
+            Tween(btn, { BackgroundTransparency = 0.2 }, 0.2)
             if content then
                 local transProp = content:IsA("ImageLabel") and "ImageTransparency" or "TextTransparency"
-                Tween(content, {[transProp]=0.3}, 0.2)
+                Tween(content, { [transProp] = 0.3 }, 0.2)
             end
-            Tween(accent, {Size=UDim2.new(0,0,0,0), BackgroundTransparency=1}, 0.2)
+            Tween(accent, { Size = UDim2.new(0, 0, 0, 0), BackgroundTransparency = 1 }, 0.2)
         end)
         btn.MouseButton1Click:Connect(callback)
         table.insert(ThemeListeners, function()
             btn.BackgroundColor3 = CurrentTheme.Element or CurrentTheme.Top
             accent.BackgroundColor3 = CurrentTheme.Accent
-            accentGrad.Color = ColorSequence.new({ColorSequenceKeypoint.new(0, CurrentTheme.Accent), ColorSequenceKeypoint.new(1, CurrentTheme.Accent)})
+            accentGrad.Color = ColorSequence.new({ ColorSequenceKeypoint.new(0, CurrentTheme.Accent), ColorSequenceKeypoint.new(1, CurrentTheme.Accent) })
             if content and content:IsA("ImageLabel") then
                 content.ImageColor3 = CurrentTheme.Text
             elseif content and content:IsA("TextLabel") then
@@ -3645,32 +3649,20 @@ function Fenglib:CreateWindow(Config)
         return btn
     end
 
-    -- 最小化
+    -- 三个具体按钮（最小化、最大化、关闭）
     local MinimizeBtn = createControlButton(nil, "−", function()
         MainFrame.Visible = false
     end)
 
-    -- 最大化/设置（切换 Resizer 可见性）
     local MaximizeBtn = createControlButton("rbxassetid://6031090998", nil, function()
-        Resizer.Visible = not Resizer.Visible
+        resizerVisible = not resizerVisible
+        Resizer.Visible = resizerVisible
     end)
 
-    -- 关闭（弹出确认对话框）
     local CloseBtn = createControlButton("rbxassetid://130510492706892", nil, function()
-        Window:Dialog({
-            Title = "Destroy Window?",
-            Content = "Are you sure you want to destroy this window?",
-            Buttons = {
-                { Text = "Cancel", ReturnValue = false },
-                { Text = "Yes", Primary = true, ReturnValue = true },
-            },
-            Callback = function(result)
-                if result == true then
-                    ScreenGui:Destroy()
-                end
-            end,
-        })
+        ScreenGui:Destroy()
     end)
+    -- =============================================
 
     -- 内容容器
     local TabContainer = Instance.new("Frame")
