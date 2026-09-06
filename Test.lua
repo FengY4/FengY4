@@ -3757,7 +3757,6 @@ function Fenglib:CreateWindow(Config)
         else
             MainFrame.Visible = true
             OpenButton.Visible = false
-            MainFrame.Size = UDim2.new(0, FINAL_WIDTH, 0, FINAL_HEIGHT)
         end
     end)
     MainFrame:GetPropertyChangedSignal("Visible"):Connect(function()
