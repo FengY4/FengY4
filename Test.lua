@@ -4,7 +4,7 @@
     所有 UI 元素均已完整展开
     ================================================
     [MOD] 移植 miUI 的透明度增强：
-      - 背景模糊（DepthOfField + 动态 Part）
+      - 背景模糊（DepthOfField + 动态 Part，已修复 PointToObjectSpace）
       - 窗口背景渐变（UIGradient）
       - 动态描边透明度跟随主题
       - 窗口大小固定为 500×320
@@ -3418,7 +3418,7 @@ function Fenglib:CreateWindow(Config)
         end
     end)
 
-    -- [MOD] 背景模糊模块（移植自 miUI）
+    -- [MOD] 背景模糊模块（移植自 miUI，已修复 PointToObjectSpace）
     local function CreateBlurModule()
         if not MainFrame or not MainFrame.Parent then return end
         local Part = Instance.new("Part")
@@ -3478,7 +3478,8 @@ function Fenglib:CreateWindow(Config)
                 mesh = Instance.new("BlockMesh")
                 mesh.Parent = Part
             end
-            mesh.Offset = cam:PointToObjectSpace(center)
+            -- 修复：使用正确的 CFrame:PointToObjectSpace
+            mesh.Offset = cam.CFrame:PointToObjectSpace(center)
             mesh.Scale = scale
             Part.Transparency = 0.97
             DOF.NearIntensity = 1
@@ -3489,7 +3490,6 @@ function Fenglib:CreateWindow(Config)
         local resizeConn = MainFrame:GetPropertyChangedSignal("Size"):Connect(UpdateBlur)
         local changeConn = MainFrame:GetPropertyChangedSignal("Position"):Connect(UpdateBlur)
 
-        -- 清理
         MainFrame.AncestryChanged:Connect(function(_, newParent)
             if not newParent then
                 updateConn:Disconnect()
