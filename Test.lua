@@ -1,8 +1,7 @@
 --[[
     ═══════════════════════════════════════════════════════════════════
-    FengYu-Bento (miUI 框架整合版)  —— 完整版
-    窗口外观采用 miUI 风格，功能逻辑完全沿用原 Test.lua
-    包含完整的 createSectionBuilder 及所有元素构建器
+    FengYu-Bento (miUI 框架整合版 – 完整实现)
+    窗口尺寸 500×299，所有元素完整可用
     ═══════════════════════════════════════════════════════════════════
 ]]
 local TweenService = game:GetService("TweenService")
@@ -17,7 +16,9 @@ local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
 local function safeDisconnect(conn)
-    if conn then pcall(conn.Disconnect, conn) end
+    if conn then
+        pcall(conn.Disconnect, conn)
+    end
 end
 
 -- ==================== 动画模块 ====================
@@ -28,7 +29,9 @@ do
     function Animation.Apply(theme, root, shineEnabled)
         if not root then return end
         local st = _state[root]
-        if st and st.conn then safeDisconnect(st.conn) end
+        if st and st.conn then
+            safeDisconnect(st.conn)
+        end
         st = {conn = nil}
         _state[root] = st
         if not theme or not shineEnabled or not theme.ShineEnabled or not theme.Shine then return end
@@ -98,7 +101,10 @@ local function startNeonFlowEffect(obj, prop, speed)
     local hue = 0
     local conn
     conn = RunService.Heartbeat:Connect(function()
-        if not obj or not obj.Parent then safeDisconnect(conn); return end
+        if not obj or not obj.Parent then
+            safeDisconnect(conn)
+            return
+        end
         hue = (hue + speed) % 1
         obj[prop] = Color3.new(
             math.sin(hue * 3 + 0) * 0.3 + 0.7,
@@ -112,12 +118,18 @@ end
 local function createPulseGlow(obj)
     local running = true
     local conn = RunService.Heartbeat:Connect(function()
-        if not obj or not obj.Parent or not running then safeDisconnect(conn); return end
+        if not obj or not obj.Parent or not running then
+            safeDisconnect(conn)
+            return
+        end
         local a = 0.5 + math.sin(tick() * 3) * 0.3
         if obj:IsA("UIStroke") then obj.Transparency = a
         elseif obj:IsA("Frame") or obj:IsA("TextButton") then obj.BackgroundTransparency = a end
     end)
-    return { Disconnect = function() running = false; safeDisconnect(conn) end }
+    return {
+        Disconnect = function() running = false; safeDisconnect(conn) end,
+        IsRunning = function() return running and obj and obj.Parent end
+    }
 end
 
 local function AddToRegistry(obj, prop, key)
@@ -349,6 +361,7 @@ local function createLockOverlay(parent, defaultTitle)
             break
         end
     end
+
     local lockFrame = Instance.new("Frame")
     lockFrame.Size = UDim2.new(1, 0, 1, 0)
     lockFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
@@ -356,19 +369,23 @@ local function createLockOverlay(parent, defaultTitle)
     lockFrame.Visible = false
     lockFrame.ZIndex = 10
     lockFrame.Parent = parent
+
     local corner = Instance.new("UICorner")
     corner.CornerRadius = cornerRadius
     corner.Parent = lockFrame
+
     local container = Instance.new("Frame")
     container.Size = UDim2.new(1, 0, 1, 0)
     container.BackgroundTransparency = 1
     container.Parent = lockFrame
+
     local layout = Instance.new("UIListLayout")
     layout.FillDirection = Enum.FillDirection.Horizontal
     layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
     layout.VerticalAlignment = Enum.VerticalAlignment.Center
     layout.Padding = UDim.new(0, 8)
     layout.Parent = container
+
     local lockIcon = Instance.new("ImageLabel")
     lockIcon.Size = UDim2.new(0, 18, 0, 18)
     lockIcon.BackgroundTransparency = 1
@@ -376,6 +393,7 @@ local function createLockOverlay(parent, defaultTitle)
     lockIcon.ImageColor3 = Color3.fromRGB(255, 255, 255)
     lockIcon.ImageTransparency = 0.1
     lockIcon.Parent = container
+
     local lockLabel = Instance.new("TextLabel")
     lockLabel.Size = UDim2.new(0, 0, 0, 20)
     lockLabel.BackgroundTransparency = 1
@@ -386,22 +404,11 @@ local function createLockOverlay(parent, defaultTitle)
     lockLabel.TextSize = 14
     lockLabel.AutomaticSize = Enum.AutomaticSize.X
     lockLabel.Parent = container
+
     return lockFrame, lockLabel
 end
 
--- ==================== 样式容器 ====================
-local function styleContainer(frame)
-    frame.BackgroundTransparency = 0.92
-    local stroke = Instance.new("UIStroke")
-    stroke.Thickness = 1
-    stroke.Color = CurrentTheme.Stroke
-    stroke.Transparency = 0.6
-    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-    stroke.Parent = frame
-    table.insert(ThemeListeners, function() stroke.Color = CurrentTheme.Stroke end)
-end
-
--- ==================== 完整的 createSectionBuilder ====================
+-- ==================== 完整元素构建器（从原 Test.lua 完整复制） ====================
 local function createSectionBuilder(parent, contentContainer, elementWidth, windowCount, window)
     local win = window
     local padding = parent:FindFirstChild("SectionPadding")
@@ -677,7 +684,6 @@ local function createSectionBuilder(parent, contentContainer, elementWidth, wind
             if open then updateSectionHeight(false) end
         end)
 
-        -- ==================== 子元素构建器 ====================
         local child = {}
 
         child.Button = function(_, config)
@@ -3282,10 +3288,20 @@ local function createSectionBuilder(parent, contentContainer, elementWidth, wind
             return mod
         end
 
-        -- ==================== 返回子元素集合 ====================
+        -- 样式辅助函数
+        local function styleContainer(frame)
+            frame.BackgroundTransparency = 0.92
+            local stroke = Instance.new("UIStroke")
+            stroke.Thickness = 1
+            stroke.Color = CurrentTheme.Stroke
+            stroke.Transparency = 0.6
+            stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+            stroke.Parent = frame
+            table.insert(ThemeListeners, function() stroke.Color = CurrentTheme.Stroke end)
+        end
+
         return child
     end
-
     return createSection
 end
 
@@ -3335,6 +3351,7 @@ function Fenglib:CreateWindow(Config)
     ScreenGui.ScreenInsets = Enum.ScreenInsets.None
     if syn and syn.protect_gui then syn.protect_gui(ScreenGui) elseif gethui then ScreenGui.Parent = gethui() end
 
+    -- 通知容器
     local NotificationHolder = Instance.new("Frame")
     NotificationHolder.Name = "NotificationHolder"
     NotificationHolder.Size = UDim2.new(0,300,0,0)
@@ -3358,8 +3375,9 @@ function Fenglib:CreateWindow(Config)
     HolderPadding.PaddingBottom = UDim.new(0,5)
     HolderPadding.Parent = NotificationHolder
 
-    local FINAL_WIDTH = 640
-    local FINAL_HEIGHT = 480
+    -- 窗口尺寸 (与原 Test.lua 一致)
+    local FINAL_WIDTH = 500
+    local FINAL_HEIGHT = 299
 
     -- 主窗口
     local MainFrame = Instance.new("Frame")
@@ -3379,6 +3397,7 @@ function Fenglib:CreateWindow(Config)
     Stroke.Parent = MainFrame
     AddToRegistry(Stroke, "Color", "Stroke")
 
+    -- 背景图
     local bgImage = Instance.new("ImageLabel")
     bgImage.Name = "FluentBG"
     bgImage.Size = UDim2.new(1,0,1,0)
@@ -3754,7 +3773,7 @@ function Fenglib:CreateWindow(Config)
         end
     end)
 
-    -- ===== 重写 Window:Category 和 Window:Tab =====
+    -- ===== Window:Category 和 Window:Tab =====
     Window._currentCategory = nil
     function Window:Category(config)
         local name = type(config)=="table" and config.Name or config
