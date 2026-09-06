@@ -2,6 +2,12 @@
     FengYu-Bento (miUI 框架 – 完整版)
     三按钮功能与原文件完全一致：最小化/最大化(Resizer)/关闭(确认框)
     所有 UI 元素均已完整展开
+    ================================================
+    [MOD] 移植 miUI 的透明度增强：
+      - 背景模糊（DepthOfField + 动态 Part）
+      - 窗口背景渐变（UIGradient）
+      - 动态描边透明度跟随主题
+      - 窗口大小固定为 500×320
 ]]
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
@@ -13,6 +19,11 @@ local TextService = game:GetService("TextService")
 local Lighting = game:GetService("Lighting")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
+
+-- [MOD] 新增 DepthOfField 和 Blur 相关引用
+local DepthOfFieldEffect = Instance.new("DepthOfFieldEffect")
+DepthOfFieldEffect.Name = "FengBlurDOF"
+DepthOfFieldEffect.Enabled = false
 
 local function safeDisconnect(conn) if conn then pcall(conn.Disconnect, conn) end end
 
@@ -3312,8 +3323,9 @@ function Fenglib:CreateWindow(Config)
     HolderPadding.PaddingBottom = UDim.new(0,5)
     HolderPadding.Parent = NotificationHolder
 
+    -- [MOD] 窗口大小固定为 500×320
     local FINAL_WIDTH = 500
-    local FINAL_HEIGHT = 299
+    local FINAL_HEIGHT = 320
 
     -- 主窗口
     local MainFrame = Instance.new("Frame")
@@ -3332,7 +3344,22 @@ function Fenglib:CreateWindow(Config)
     Stroke.Parent = MainFrame
     AddToRegistry(Stroke, "Color", "Stroke")
 
-    -- 背景图
+    -- [MOD] 添加背景渐变（模仿 miUI 的玻璃质感）
+    local bgGradient = Instance.new("UIGradient")
+    bgGradient.Name = "FengBgGradient"
+    bgGradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, CurrentTheme.Main),
+        ColorSequenceKeypoint.new(0.5, CurrentTheme.Top),
+        ColorSequenceKeypoint.new(1, CurrentTheme.Main)
+    })
+    bgGradient.Transparency = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 0.3),
+        NumberSequenceKeypoint.new(0.5, 0.1),
+        NumberSequenceKeypoint.new(1, 0.3)
+    })
+    bgGradient.Parent = MainFrame
+
+    -- [MOD] 背景图（保留，但放在渐变下层）
     local bgImage = Instance.new("ImageLabel")
     bgImage.Name = "FluentBG"
     bgImage.Size = UDim2.new(1,0,1,0)
@@ -3346,19 +3373,6 @@ function Fenglib:CreateWindow(Config)
     bgImage.ZIndex = 0
     bgImage.Parent = MainFrame
     Instance.new("UICorner", bgImage).CornerRadius = UDim.new(0,12)
-    local bgGradient = Instance.new("UIGradient")
-    bgGradient.Rotation = 0
-    bgGradient.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, CurrentTheme.Main),
-        ColorSequenceKeypoint.new(0.5, CurrentTheme.Top),
-        ColorSequenceKeypoint.new(1, CurrentTheme.Main)
-    })
-    bgGradient.Transparency = NumberSequence.new({
-        NumberSequenceKeypoint.new(0, 0.8),
-        NumberSequenceKeypoint.new(0.5, 0.4),
-        NumberSequenceKeypoint.new(1, 0.8)
-    })
-    bgGradient.Parent = bgImage
 
     -- Resizer
     local Resizer = Instance.new("TextButton")
@@ -3401,6 +3415,95 @@ function Fenglib:CreateWindow(Config)
     UserInputService.InputEnded:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             isResizing = false
+        end
+    end)
+
+    -- [MOD] 背景模糊模块（移植自 miUI）
+    local function CreateBlurModule()
+        if not MainFrame or not MainFrame.Parent then return end
+        local Part = Instance.new("Part")
+        Part.Name = "FengBlurPart"
+        Part.Anchored = true
+        Part.CanCollide = false
+        Part.CanTouch = false
+        Part.CastShadow = false
+        Part.Material = Enum.Material.Glass
+        Part.Transparency = 0.97
+        Part.Reflectance = 0.8
+        Part.Size = Vector3.new(1,1,1) * 0.01
+        Part.Parent = workspace
+
+        local DOF = DepthOfFieldEffect
+        DOF.Enabled = true
+        DOF.FarIntensity = 0
+        DOF.FocusDistance = 0
+        DOF.InFocusRadius = 1000
+        DOF.NearIntensity = 1
+        DOF.Parent = Lighting
+
+        local function UpdateBlur()
+            if not MainFrame.Visible then
+                Part.Transparency = 1
+                DOF.NearIntensity = 0
+                return
+            end
+            local cam = Camera
+            if not cam then return end
+            local pos = MainFrame.AbsolutePosition
+            local size = MainFrame.AbsoluteSize
+            local corner0 = pos
+            local corner1 = pos + size
+            local ray0 = cam:ScreenPointToRay(corner0.X, corner0.Y, 1)
+            local ray1 = cam:ScreenPointToRay(corner1.X, corner1.Y, 1)
+            local planeOrigin = cam.CFrame.Position + cam.CFrame.LookVector * 0.05
+            local planeNormal = cam.CFrame.LookVector
+
+            local function getPos(origin, dir)
+                local num = planeNormal:Dot(planeOrigin - origin)
+                local den = planeNormal:Dot(dir)
+                if math.abs(den) < 1e-8 then return origin end
+                local t = num / den
+                return origin + dir * t
+            end
+
+            local p0 = getPos(ray0.Origin, ray0.Direction)
+            local p1 = getPos(ray1.Origin, ray1.Direction)
+            local center = (p0 + p1) / 2
+            local sizeVec = p1 - p0
+            Part.CFrame = cam.CFrame
+            local scale = sizeVec / 0.0101
+            Part.Size = Vector3.new(1,1,1) * 0.01
+            local mesh = Part:FindFirstChildOfClass("BlockMesh")
+            if not mesh then
+                mesh = Instance.new("BlockMesh")
+                mesh.Parent = Part
+            end
+            mesh.Offset = cam:PointToObjectSpace(center)
+            mesh.Scale = scale
+            Part.Transparency = 0.97
+            DOF.NearIntensity = 1
+        end
+
+        local updateConn = RunService.RenderStepped:Connect(UpdateBlur)
+        MainFrame:GetPropertyChangedSignal("Visible"):Connect(UpdateBlur)
+        local resizeConn = MainFrame:GetPropertyChangedSignal("Size"):Connect(UpdateBlur)
+        local changeConn = MainFrame:GetPropertyChangedSignal("Position"):Connect(UpdateBlur)
+
+        -- 清理
+        MainFrame.AncestryChanged:Connect(function(_, newParent)
+            if not newParent then
+                updateConn:Disconnect()
+                resizeConn:Disconnect()
+                changeConn:Disconnect()
+                pcall(function() Part:Destroy() end)
+                DOF.Enabled = false
+            end
+        end)
+    end
+    -- 在窗口显示后调用模糊
+    task.delay(0.3, function()
+        if MainFrame and MainFrame.Parent then
+            pcall(CreateBlurModule)
         end
     end)
 
