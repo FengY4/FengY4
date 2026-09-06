@@ -1,3 +1,10 @@
+--[[
+    ═══════════════════════════════════════════════════════════════════
+    FengYu-Bento (miUI 框架整合版)  —— 完整版
+    窗口外观采用 miUI 风格，功能逻辑完全沿用原 Test.lua
+    包含完整的 createSectionBuilder 及所有元素构建器
+    ═══════════════════════════════════════════════════════════════════
+]]
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
@@ -10,11 +17,10 @@ local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
 local function safeDisconnect(conn)
-    if conn then
-        pcall(conn.Disconnect, conn)
-    end
+    if conn then pcall(conn.Disconnect, conn) end
 end
 
+-- ==================== 动画模块 ====================
 local Animation = {}
 do
     local _RunService = RunService
@@ -22,9 +28,7 @@ do
     function Animation.Apply(theme, root, shineEnabled)
         if not root then return end
         local st = _state[root]
-        if st and st.conn then
-            safeDisconnect(st.conn)
-        end
+        if st and st.conn then safeDisconnect(st.conn) end
         st = {conn = nil}
         _state[root] = st
         if not theme or not shineEnabled or not theme.ShineEnabled or not theme.Shine then return end
@@ -54,50 +58,7 @@ do
     end
 end
 
-local Fenglib = {}
-local Registry = {}
-local ConfigObjects = {}
-local ThemeListeners = {}
-local WindowCleanup = {}
-
-local function clamp(v, min, max) return math.max(min, math.min(max, v)) end
-
-local function startNeonFlowEffect(obj, prop, speed)
-    speed = speed or 0.008
-    local hue = 0
-    local conn
-    conn = RunService.Heartbeat:Connect(function()
-        if not obj or not obj.Parent then
-            safeDisconnect(conn)
-            return
-        end
-        hue = (hue + speed) % 1
-        obj[prop] = Color3.new(
-            math.sin(hue * 3 + 0) * 0.3 + 0.7,
-            math.sin(hue * 3 + 2) * 0.1,
-            math.sin(hue * 3 + 4) * 0.1
-        )
-    end)
-    return conn
-end
-
-local function createPulseGlow(obj)
-    local running = true
-    local conn = RunService.Heartbeat:Connect(function()
-        if not obj or not obj.Parent or not running then
-            safeDisconnect(conn)
-            return
-        end
-        local a = 0.5 + math.sin(tick() * 3) * 0.3
-        if obj:IsA("UIStroke") then obj.Transparency = a
-        elseif obj:IsA("Frame") or obj:IsA("TextButton") then obj.BackgroundTransparency = a end
-    end)
-    return {
-        Disconnect = function() running = false; safeDisconnect(conn) end,
-        IsRunning = function() return running and obj and obj.Parent end
-    }
-end
-
+-- ==================== 主题定义 ====================
 local Themes = {
     Dark = { Main=Color3.fromRGB(13,13,13), Top=Color3.fromRGB(28,28,30), Text=Color3.fromRGB(240,240,245), Accent=Color3.fromRGB(80,140,255), Stroke=Color3.fromRGB(45,45,48), SubText=Color3.fromRGB(160,160,170), Element=Color3.fromRGB(45,45,50), Hover=Color3.fromRGB(60,60,70), ShineEnabled=true, Shine={Speed=0.4,RotationSpeed=20,ColorSequence=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(40,40,40)),ColorSequenceKeypoint.new(0.5,Color3.fromRGB(105,105,105)),ColorSequenceKeypoint.new(1,Color3.fromRGB(40,40,40))})}, StrokeShine=true, StrokeDark=Color3.fromRGB(40,40,40) },
     ["Deep Violet"] = { Main=Color3.fromRGB(20,20,20), Top=Color3.fromRGB(140,120,160), Text=Color3.fromRGB(240,240,240), Accent=Color3.fromRGB(97,62,167), Stroke=Color3.fromRGB(100,90,110), SubText=Color3.fromRGB(170,170,170), Element=Color3.fromRGB(140,120,160), Hover=Color3.fromRGB(140,120,160), ShineEnabled=true, Shine={Speed=0.5,RotationSpeed=25,ColorSequence=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(40,25,65)),ColorSequenceKeypoint.new(0.5,Color3.fromRGB(160,120,220)),ColorSequenceKeypoint.new(1,Color3.fromRGB(40,25,65))})}, StrokeShine=true, StrokeDark=Color3.fromRGB(110,90,130) },
@@ -125,6 +86,40 @@ local Themes = {
 }
 local CurrentTheme = Themes.Dark
 
+-- ==================== 工具函数 ====================
+local Registry = {}
+local ConfigObjects = {}
+local ThemeListeners = {}
+
+local function clamp(v, min, max) return math.max(min, math.min(max, v)) end
+
+local function startNeonFlowEffect(obj, prop, speed)
+    speed = speed or 0.008
+    local hue = 0
+    local conn
+    conn = RunService.Heartbeat:Connect(function()
+        if not obj or not obj.Parent then safeDisconnect(conn); return end
+        hue = (hue + speed) % 1
+        obj[prop] = Color3.new(
+            math.sin(hue * 3 + 0) * 0.3 + 0.7,
+            math.sin(hue * 3 + 2) * 0.1,
+            math.sin(hue * 3 + 4) * 0.1
+        )
+    end)
+    return conn
+end
+
+local function createPulseGlow(obj)
+    local running = true
+    local conn = RunService.Heartbeat:Connect(function()
+        if not obj or not obj.Parent or not running then safeDisconnect(conn); return end
+        local a = 0.5 + math.sin(tick() * 3) * 0.3
+        if obj:IsA("UIStroke") then obj.Transparency = a
+        elseif obj:IsA("Frame") or obj:IsA("TextButton") then obj.BackgroundTransparency = a end
+    end)
+    return { Disconnect = function() running = false; safeDisconnect(conn) end }
+end
+
 local function AddToRegistry(obj, prop, key)
     local val = CurrentTheme[key] or Themes.Dark[key] or Color3.new(1,1,1)
     table.insert(Registry, {Object = obj, Property = prop, Type = key})
@@ -134,6 +129,9 @@ end
 local function Tween(obj, props, time)
     TweenService:Create(obj, TweenInfo.new(time or 0.45, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), props):Play()
 end
+
+-- ==================== Fenglib 核心 API ====================
+local Fenglib = {}
 
 function Fenglib:SetTheme(name)
     if Themes[name] then
@@ -173,6 +171,7 @@ function Fenglib:LoadConfig(path)
     return true
 end
 
+-- ==================== 媒体管理器 ====================
 local MediaManager = {Folder = "FengMediaCache"}
 function MediaManager:SetFolder(f) self.Folder = f end
 function MediaManager:_init(sub)
@@ -341,6 +340,56 @@ function MediaManager:Image(src)
     return ""
 end
 
+-- ==================== 锁覆盖层 ====================
+local function createLockOverlay(parent, defaultTitle)
+    local cornerRadius = UDim.new(0, 8)
+    for _, child in ipairs(parent:GetChildren()) do
+        if child:IsA("UICorner") then
+            cornerRadius = child.CornerRadius
+            break
+        end
+    end
+    local lockFrame = Instance.new("Frame")
+    lockFrame.Size = UDim2.new(1, 0, 1, 0)
+    lockFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    lockFrame.BackgroundTransparency = 0.6
+    lockFrame.Visible = false
+    lockFrame.ZIndex = 10
+    lockFrame.Parent = parent
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = cornerRadius
+    corner.Parent = lockFrame
+    local container = Instance.new("Frame")
+    container.Size = UDim2.new(1, 0, 1, 0)
+    container.BackgroundTransparency = 1
+    container.Parent = lockFrame
+    local layout = Instance.new("UIListLayout")
+    layout.FillDirection = Enum.FillDirection.Horizontal
+    layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    layout.VerticalAlignment = Enum.VerticalAlignment.Center
+    layout.Padding = UDim.new(0, 8)
+    layout.Parent = container
+    local lockIcon = Instance.new("ImageLabel")
+    lockIcon.Size = UDim2.new(0, 18, 0, 18)
+    lockIcon.BackgroundTransparency = 1
+    lockIcon.Image = "rbxassetid://12060512624"
+    lockIcon.ImageColor3 = Color3.fromRGB(255, 255, 255)
+    lockIcon.ImageTransparency = 0.1
+    lockIcon.Parent = container
+    local lockLabel = Instance.new("TextLabel")
+    lockLabel.Size = UDim2.new(0, 0, 0, 20)
+    lockLabel.BackgroundTransparency = 1
+    lockLabel.Font = Enum.Font.GothamBold
+    lockLabel.Text = defaultTitle or "Locked"
+    lockLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    lockLabel.TextTransparency = 0.2
+    lockLabel.TextSize = 14
+    lockLabel.AutomaticSize = Enum.AutomaticSize.X
+    lockLabel.Parent = container
+    return lockFrame, lockLabel
+end
+
+-- ==================== 样式容器 ====================
 local function styleContainer(frame)
     frame.BackgroundTransparency = 0.92
     local stroke = Instance.new("UIStroke")
@@ -352,61 +401,7 @@ local function styleContainer(frame)
     table.insert(ThemeListeners, function() stroke.Color = CurrentTheme.Stroke end)
 end
 
-local function createLockOverlay(parent, defaultTitle)
-    local cornerRadius = UDim.new(0, 8)
-    for _, child in ipairs(parent:GetChildren()) do
-        if child:IsA("UICorner") then
-            cornerRadius = child.CornerRadius
-            break
-        end
-    end
-
-    local lockFrame = Instance.new("Frame")
-    lockFrame.Size = UDim2.new(1, 0, 1, 0)
-    lockFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-    lockFrame.BackgroundTransparency = 0.6
-    lockFrame.Visible = false
-    lockFrame.ZIndex = 10
-    lockFrame.Parent = parent
-
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = cornerRadius
-    corner.Parent = lockFrame
-
-    local container = Instance.new("Frame")
-    container.Size = UDim2.new(1, 0, 1, 0)
-    container.BackgroundTransparency = 1
-    container.Parent = lockFrame
-
-    local layout = Instance.new("UIListLayout")
-    layout.FillDirection = Enum.FillDirection.Horizontal
-    layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-    layout.VerticalAlignment = Enum.VerticalAlignment.Center
-    layout.Padding = UDim.new(0, 8)
-    layout.Parent = container
-
-    local lockIcon = Instance.new("ImageLabel")
-    lockIcon.Size = UDim2.new(0, 18, 0, 18)
-    lockIcon.BackgroundTransparency = 1
-    lockIcon.Image = "rbxassetid://12060512624"
-    lockIcon.ImageColor3 = Color3.fromRGB(255, 255, 255)
-    lockIcon.ImageTransparency = 0.1
-    lockIcon.Parent = container
-
-    local lockLabel = Instance.new("TextLabel")
-    lockLabel.Size = UDim2.new(0, 0, 0, 20)
-    lockLabel.BackgroundTransparency = 1
-    lockLabel.Font = Enum.Font.GothamBold
-    lockLabel.Text = defaultTitle or "Locked"
-    lockLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    lockLabel.TextTransparency = 0.2
-    lockLabel.TextSize = 14
-    lockLabel.AutomaticSize = Enum.AutomaticSize.X
-    lockLabel.Parent = container
-
-    return lockFrame, lockLabel
-end
-
+-- ==================== 完整的 createSectionBuilder ====================
 local function createSectionBuilder(parent, contentContainer, elementWidth, windowCount, window)
     local win = window
     local padding = parent:FindFirstChild("SectionPadding")
@@ -682,6 +677,7 @@ local function createSectionBuilder(parent, contentContainer, elementWidth, wind
             if open then updateSectionHeight(false) end
         end)
 
+        -- ==================== 子元素构建器 ====================
         local child = {}
 
         child.Button = function(_, config)
@@ -3286,22 +3282,21 @@ local function createSectionBuilder(parent, contentContainer, elementWidth, wind
             return mod
         end
 
+        -- ==================== 返回子元素集合 ====================
         return child
     end
+
     return createSection
 end
 
+-- ==================== 窗口创建函数（miUI 框架） ====================
 function Fenglib:CreateWindow(Config)
     local Window = {}
-    local Title = Config.Name or "FengY3"
+    local Title = Config.Name or "FengYu"
     local Subtitle = Config.SubName
     local Keybind = Config.Keybind
     local IconAsset = Config.Logo
     local SceneId = Config.Scene or 102597607447167
-
-    Window.RootFolder = Title
-    Window.ConfigFolder = Title.."/Config"
-    Window.CurrentConfig = ""
 
     if Config.Theme then
         if type(Config.Theme)=="string" then
@@ -3363,22 +3358,24 @@ function Fenglib:CreateWindow(Config)
     HolderPadding.PaddingBottom = UDim.new(0,5)
     HolderPadding.Parent = NotificationHolder
 
-    local FINAL_WIDTH = 500
-    local FINAL_HEIGHT = 299
+    local FINAL_WIDTH = 640
+    local FINAL_HEIGHT = 480
 
+    -- 主窗口
     local MainFrame = Instance.new("Frame")
     MainFrame.Size = UDim2.new(0,0,0,0)
     MainFrame.Position = UDim2.new(0.5,0,0.5,0)
     MainFrame.AnchorPoint = Vector2.new(0.5,0.5)
     MainFrame.ClipsDescendants = true
-    MainFrame.BackgroundTransparency = 0.15
+    MainFrame.BackgroundTransparency = 0.035
     MainFrame.Visible = false
     MainFrame.Parent = ScreenGui
-    Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0,16)
+    Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 12)
     AddToRegistry(MainFrame, "BackgroundColor3", "Main")
 
     local Stroke = Instance.new("UIStroke")
-    Stroke.Thickness = 2
+    Stroke.Thickness = 1.5
+    Stroke.Transparency = 0.65
     Stroke.Parent = MainFrame
     AddToRegistry(Stroke, "Color", "Stroke")
 
@@ -3394,373 +3391,389 @@ function Fenglib:CreateWindow(Config)
     bgImage.ScaleType = Enum.ScaleType.Crop
     bgImage.ZIndex = 0
     bgImage.Parent = MainFrame
-    Instance.new("UICorner", bgImage).CornerRadius = UDim.new(0,16)
+    Instance.new("UICorner", bgImage).CornerRadius = UDim.new(0,12)
 
     local bgGradient = Instance.new("UIGradient")
     bgGradient.Rotation = 0
     bgGradient.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(180,10,20)),
-        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255,80,80)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(180,10,20))
+        ColorSequenceKeypoint.new(0, CurrentTheme.Main),
+        ColorSequenceKeypoint.new(0.5, CurrentTheme.Top),
+        ColorSequenceKeypoint.new(1, CurrentTheme.Main)
     })
     bgGradient.Transparency = NumberSequence.new({
-        NumberSequenceKeypoint.new(0,0.6),
-        NumberSequenceKeypoint.new(0.5,0.0),
-        NumberSequenceKeypoint.new(1,0.6)
+        NumberSequenceKeypoint.new(0, 0.8),
+        NumberSequenceKeypoint.new(0.5, 0.4),
+        NumberSequenceKeypoint.new(1, 0.8)
     })
     bgGradient.Parent = bgImage
 
-    local animConn = nil
-    if CurrentTheme.ShineEnabled then
-        animConn = Animation.Apply(CurrentTheme, bgImage, true)
-    end
+    -- 左侧菜单
+    local LeftMenuFrame = Instance.new("Frame")
+    LeftMenuFrame.Size = UDim2.new(0, 175, 1, 0)
+    LeftMenuFrame.BackgroundTransparency = 1
+    LeftMenuFrame.BorderSizePixel = 0
+    LeftMenuFrame.Parent = MainFrame
 
-    local Resizer = Instance.new("TextButton")
-    Resizer.Name = "WindowResizer"
-    Resizer.Parent = MainFrame
-    Resizer.BackgroundTransparency = 0.8
-    Resizer.BackgroundColor3 = Color3.new(1,1,1)
-    Resizer.Position = UDim2.new(1, 5, 1, 5)
-    Resizer.Size = UDim2.new(0, 24, 0, 24)
-    Resizer.AnchorPoint = Vector2.new(1, 1)
-    Resizer.Text = ""
-    Resizer.ZIndex = 30
-    Resizer.Visible = false
+    local HeadFrame = Instance.new("Frame")
+    HeadFrame.Size = UDim2.new(1, 0, 0, 50)
+    HeadFrame.BackgroundTransparency = 1
+    HeadFrame.Parent = LeftMenuFrame
 
-    local resizerStroke = Instance.new("UIStroke")
-    resizerStroke.Thickness = 4
-    resizerStroke.Color = Color3.new(1,1,1)
-    resizerStroke.Transparency = 0
-    resizerStroke.Parent = Resizer
+    local LogoImage = Instance.new("ImageLabel")
+    LogoImage.Size = UDim2.new(0, 35, 0, 35)
+    LogoImage.Position = UDim2.new(0, 10, 0.5, -17.5)
+    LogoImage.BackgroundTransparency = 1
+    LogoImage.Image = IconAsset or "rbxassetid://78229538488090"
+    LogoImage.Parent = HeadFrame
+    AddToRegistry(LogoImage, "ImageColor3", "Text")
+    Instance.new("UICorner", LogoImage).CornerRadius = UDim.new(0, 7)
 
-    local resizerCorner = Instance.new("UICorner")
-    resizerCorner.CornerRadius = UDim.new(0, 6)
-    resizerCorner.Parent = Resizer
+    local WindowName = Instance.new("TextLabel")
+    WindowName.Size = UDim2.new(1, -65, 0, 25)
+    WindowName.Position = UDim2.new(0, 55, 0, 4)
+    WindowName.BackgroundTransparency = 1
+    WindowName.Font = Enum.Font.GothamBold
+    WindowName.Text = Title
+    WindowName.TextSize = 18
+    WindowName.TextXAlignment = Enum.TextXAlignment.Left
+    WindowName.Parent = HeadFrame
+    AddToRegistry(WindowName, "TextColor3", "Text")
 
-    local resizerVisible = false
-    local isResizing = false
-    local resizeStart = Vector2.new(0,0)
-    local startSize = UDim2.new(0,0,0,0)
+    local WindowContent = Instance.new("TextLabel")
+    WindowContent.Size = UDim2.new(1, -65, 0, 15)
+    WindowContent.Position = UDim2.new(0, 55, 0, 25)
+    WindowContent.BackgroundTransparency = 1
+    WindowContent.Font = Enum.Font.GothamMedium
+    WindowContent.Text = Subtitle or ""
+    WindowContent.TextSize = 9
+    WindowContent.TextTransparency = 0.65
+    WindowContent.TextXAlignment = Enum.TextXAlignment.Left
+    WindowContent.Parent = HeadFrame
+    AddToRegistry(WindowContent, "TextColor3", "SubText")
 
-    Resizer.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            isResizing = true
-            resizeStart = input.Position
-            startSize = MainFrame.Size
-        end
-    end)
+    local LineFrame = Instance.new("Frame")
+    LineFrame.Size = UDim2.new(1, -10, 0, 1)
+    LineFrame.Position = UDim2.new(0.5, 0, 1, 0)
+    LineFrame.AnchorPoint = Vector2.new(0.5, 1)
+    LineFrame.BackgroundTransparency = 0.65
+    LineFrame.BorderSizePixel = 0
+    LineFrame.Parent = HeadFrame
+    AddToRegistry(LineFrame, "BackgroundColor3", "Stroke")
 
-    UserInputService.InputChanged:Connect(function(input)
-        if isResizing and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-            local delta = input.Position - resizeStart
-            local newWidth = math.max(400, startSize.X.Offset + delta.X)
-            local newHeight = math.max(250, startSize.Y.Offset + delta.Y)
-            MainFrame.Size = UDim2.new(0, newWidth, 0, newHeight)
-        end
-    end)
-
-    UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            isResizing = false
-        end
-    end)
-
-    local IntroHolder = Instance.new("Frame")
-    IntroHolder.Size = UDim2.new(1,999999,1,999999)
-    IntroHolder.AnchorPoint = Vector2.new(0.5,0.5)
-    IntroHolder.Position = UDim2.new(0.5,0,0.5,0)
-    IntroHolder.BackgroundColor3 = Color3.fromRGB(230,230,235)
-    IntroHolder.BackgroundTransparency = 1
-    IntroHolder.ZIndex = 50
-    IntroHolder.Parent = ScreenGui
-
-    local function formatIcon(asset)
-        if tonumber(asset) then return "rbxassetid://"..asset
-        elseif type(asset)=="string" and asset:match("^rbxassetid://") then return asset
-        elseif type(asset)=="string" and asset:match("^http") then return asset
-        elseif type(asset)=="string" then return "rbxassetid://"..asset end
-        return "rbxassetid://78229538488090"
-    end
-
-    local IntroLogo = Instance.new("ImageLabel")
-    IntroLogo.Size = UDim2.new(0,0,0,0)
-    IntroLogo.AnchorPoint = Vector2.new(0.5,0.5)
-    IntroLogo.Position = UDim2.new(0.5,0,0.5,-16)
-    IntroLogo.BackgroundTransparency = 1
-    IntroLogo.Image = formatIcon(IconAsset or "78229538488090")
-    IntroLogo.ZIndex = 51
-    IntroLogo.Parent = IntroHolder
-    Instance.new("UICorner", IntroLogo).CornerRadius = UDim.new(1,0)
-
-    local IntroTitle = Instance.new("TextLabel")
-    IntroTitle.Size = UDim2.new(0,0,0,20)
-    IntroTitle.AnchorPoint = Vector2.new(0.5,0.5)
-    IntroTitle.Position = UDim2.new(0.5,0,0.5,40)
-    IntroTitle.BackgroundTransparency = 1
-    IntroTitle.Font = Enum.Font.GothamBold
-    IntroTitle.Text = Title
-    IntroTitle.TextColor3 = Color3.fromRGB(255,255,255)
-    IntroTitle.TextTransparency = 1
-    IntroTitle.TextSize = 20
-    IntroTitle.ZIndex = 51
-    IntroTitle.Parent = IntroHolder
-
-    local IntroSub = Instance.new("TextLabel")
-    IntroSub.Size = UDim2.new(0,0,0,16)
-    IntroSub.AnchorPoint = Vector2.new(0.5,0.5)
-    IntroSub.Position = UDim2.new(0.5,0,0.5,62)
-    IntroSub.BackgroundTransparency = 1
-    IntroSub.Font = Enum.Font.Gotham
-    IntroSub.Text = Subtitle or ""
-    IntroSub.TextColor3 = Color3.fromRGB(200,200,200)
-    IntroSub.TextTransparency = 1
-    IntroSub.TextSize = 16
-    IntroSub.ZIndex = 51
-    IntroSub.Parent = IntroHolder
-
-    TweenService:Create(IntroHolder, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency=0.85}):Play()
-    TweenService:Create(IntroLogo, TweenInfo.new(0.6, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size=UDim2.new(0,82,0,82)}):Play()
-    TweenService:Create(IntroTitle, TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextTransparency=0}):Play()
-    TweenService:Create(IntroSub, TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextTransparency=0}):Play()
-
-    task.wait(1.3)
-    MainFrame.Visible = true
-    TweenService:Create(MainFrame, TweenInfo.new(0.6, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size=UDim2.new(0,FINAL_WIDTH,0,FINAL_HEIGHT)}):Play()
-    TweenService:Create(IntroHolder, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {BackgroundTransparency=1}):Play()
-    TweenService:Create(IntroTitle, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {TextTransparency=1}):Play()
-    TweenService:Create(IntroSub, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {TextTransparency=1}):Play()
-    TweenService:Create(IntroLogo, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Size=UDim2.new(0,0,0,0)}):Play()
-    task.wait(0.35)
-    IntroHolder:Destroy()
-
-    local topbarHeight = Subtitle and 45 or 40
-    local Topbar = Instance.new("Frame")
-    Topbar.Size = UDim2.new(1,0,0,topbarHeight)
-    Topbar.BackgroundTransparency = 1
-    Topbar.Parent = MainFrame
-
-    local TopbarDivider = Instance.new("Frame")
-    TopbarDivider.Name = "TopbarDivider"
-    TopbarDivider.Size = UDim2.new(1,0,0,1)
-    TopbarDivider.Position = UDim2.new(0,0,1,0)
-    TopbarDivider.AnchorPoint = Vector2.new(0,1)
-    TopbarDivider.BackgroundColor3 = CurrentTheme.Stroke
-    TopbarDivider.BackgroundTransparency = 0.5
-    TopbarDivider.BorderSizePixel = 0
-    TopbarDivider.ZIndex = 2
-    TopbarDivider.Parent = Topbar
-    table.insert(ThemeListeners, function() TopbarDivider.BackgroundColor3 = CurrentTheme.Stroke end)
-
-    if IconAsset then
-        if tonumber(IconAsset) then IconAsset = "rbxassetid://"..IconAsset end
-    else IconAsset = "rbxassetid://78229538488090" end
-
-    local Icon = Instance.new("ImageLabel")
-    Icon.Name = "WindowIcon"
-    Icon.Size = UDim2.new(0,32,0,32)
-    Icon.Position = UDim2.new(0,10,0.5,-16)
-    Icon.BackgroundTransparency = 1
-    Icon.Image = IconAsset
-    Icon.Parent = Topbar
-    AddToRegistry(Icon, "ImageColor3", "Text")
-    local iconCorner = Instance.new("UICorner")
-    iconCorner.CornerRadius = UDim.new(0,8)
-    iconCorner.Parent = Icon
-
-    local ButtonGroup = Instance.new("Frame")
-    ButtonGroup.Name = "WindowButtons"
-    ButtonGroup.Size = UDim2.new(0,180,1,0)
-    ButtonGroup.Position = UDim2.new(1,-190,0,0)
-    ButtonGroup.BackgroundTransparency = 1
-    ButtonGroup.Parent = Topbar
-
-    local ButtonLayout = Instance.new("UIListLayout")
-    ButtonLayout.FillDirection = Enum.FillDirection.Horizontal
-    ButtonLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
-    ButtonLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-    ButtonLayout.Padding = UDim.new(0,5)
-    ButtonLayout.Parent = ButtonGroup
-
-    local ButtonPadding = Instance.new("UIPadding")
-    ButtonPadding.PaddingRight = UDim.new(0,10)
-    ButtonPadding.Parent = ButtonGroup
-
-    local function createControlButton(iconAsset, fallbackText, callback)
-        local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(0,32,0,32)
-        btn.AutoButtonColor = false
-        btn.Text = ""
-        btn.BackgroundTransparency = 0.2
-        btn.BackgroundColor3 = CurrentTheme.Element or CurrentTheme.Top
-        btn.Parent = ButtonGroup
-        local corner = Instance.new("UICorner")
-        corner.CornerRadius = UDim.new(0,7)
-        corner.Parent = btn
-        local accent = Instance.new("Frame")
-        accent.Size = UDim2.new(0,0,0,0)
-        accent.AnchorPoint = Vector2.new(0.5,0.5)
-        accent.Position = UDim2.new(0.5,0,0.5,0)
-        accent.BackgroundTransparency = 1
-        accent.ZIndex = 2
-        accent.BackgroundColor3 = CurrentTheme.Accent
-        accent.Parent = btn
-        local accentCorner = Instance.new("UICorner")
-        accentCorner.CornerRadius = UDim.new(0,7)
-        accentCorner.Parent = accent
-        local accentGrad = Instance.new("UIGradient")
-        accentGrad.Rotation = -115
-        accentGrad.Color = ColorSequence.new({ColorSequenceKeypoint.new(0, CurrentTheme.Accent), ColorSequenceKeypoint.new(1, CurrentTheme.Accent)})
-        accentGrad.Parent = accent
-        local content
-        if iconAsset then
-            content = Instance.new("ImageLabel")
-            content.Size = UDim2.new(0,14,0,14)
-            content.AnchorPoint = Vector2.new(0.5,0.5)
-            content.Position = UDim2.new(0.5,0,0.5,0)
-            content.BackgroundTransparency = 1
-            content.Image = iconAsset
-            content.ImageColor3 = CurrentTheme.Text
-            content.ImageTransparency = 0.3
-            content.ZIndex = 3
-            content.Parent = btn
-        else
-            content = Instance.new("TextLabel")
-            content.Size = UDim2.new(1,0,1,0)
-            content.BackgroundTransparency = 1
-            content.Font = Enum.Font.GothamBold
-            content.Text = fallbackText or ""
-            content.TextSize = 18
-            content.TextColor3 = CurrentTheme.Text
-            content.TextTransparency = 0.3
-            content.ZIndex = 3
-            content.Parent = btn
-        end
-        btn.MouseEnter:Connect(function()
-            Tween(btn, {BackgroundTransparency=0}, 0.2)
-            if content then
-                local transProp = content:IsA("ImageLabel") and "ImageTransparency" or "TextTransparency"
-                Tween(content, {[transProp]=0}, 0.2)
-            end
-            Tween(accent, {Size=UDim2.new(1,0,1,0), BackgroundTransparency=0}, 0.2)
-        end)
-        btn.MouseLeave:Connect(function()
-            Tween(btn, {BackgroundTransparency=0.2}, 0.2)
-            if content then
-                local transProp = content:IsA("ImageLabel") and "ImageTransparency" or "TextTransparency"
-                Tween(content, {[transProp]=0.3}, 0.2)
-            end
-            Tween(accent, {Size=UDim2.new(0,0,0,0), BackgroundTransparency=1}, 0.2)
-        end)
-        btn.MouseButton1Click:Connect(callback)
-        table.insert(ThemeListeners, function()
-            btn.BackgroundColor3 = CurrentTheme.Element or CurrentTheme.Top
-            accent.BackgroundColor3 = CurrentTheme.Accent
-            accentGrad.Color = ColorSequence.new({ColorSequenceKeypoint.new(0, CurrentTheme.Accent), ColorSequenceKeypoint.new(1, CurrentTheme.Accent)})
-            if content and content:IsA("ImageLabel") then
-                content.ImageColor3 = CurrentTheme.Text
-            elseif content and content:IsA("TextLabel") then
-                content.TextColor3 = CurrentTheme.Text
-            end
-        end)
-        return btn
-    end
-
-    local MinimizeBtn = createControlButton(nil, "−", function() MainFrame.Visible = false end)
-    local MaximizeBtn = createControlButton("rbxassetid://6031090998", nil, function()
-        resizerVisible = not resizerVisible
-        Resizer.Visible = resizerVisible
-    end)
-    local CloseBtn = createControlButton("rbxassetid://130510492706892", nil, function() ScreenGui:Destroy() end)
-
-    local TitleLabel = Instance.new("TextLabel")
-    TitleLabel.Text = Title
-    TitleLabel.BackgroundTransparency = 1
-    TitleLabel.Font = Enum.Font.GothamBold
-    TitleLabel.TextSize = 16
-    TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
-    TitleLabel.Parent = Topbar
-    AddToRegistry(TitleLabel, "TextColor3", "Text")
-
-    if Subtitle then
-        TitleLabel.Size = UDim2.new(1,-180,0,20)
-        TitleLabel.Position = UDim2.new(0,50,0,5)
-        local SubtitleLabel = Instance.new("TextLabel")
-        SubtitleLabel.Text = Subtitle
-        SubtitleLabel.Size = UDim2.new(1,-180,0,15)
-        SubtitleLabel.Position = UDim2.new(0,50,0,25)
-        SubtitleLabel.BackgroundTransparency = 1
-        SubtitleLabel.Font = Enum.Font.GothamMedium
-        SubtitleLabel.TextSize = 12
-        SubtitleLabel.TextTransparency = 0.4
-        SubtitleLabel.TextXAlignment = Enum.TextXAlignment.Left
-        SubtitleLabel.Parent = Topbar
-        AddToRegistry(SubtitleLabel, "TextColor3", "Text")
-    else
-        TitleLabel.Size = UDim2.new(1,-180,1,0)
-        TitleLabel.Position = UDim2.new(0,50,0,0)
-    end
-
-    local leftWidth = 160
-    local LeftContainer = Instance.new("Frame")
-    LeftContainer.Size = UDim2.new(0,leftWidth,1,-topbarHeight)
-    LeftContainer.Position = UDim2.new(0,0,0,topbarHeight)
-    LeftContainer.BackgroundTransparency = 1
-    LeftContainer.BackgroundColor3 = CurrentTheme.Main
-    LeftContainer.ClipsDescendants = true
-    LeftContainer.Parent = MainFrame
-    local leftCorner = Instance.new("UICorner")
-    leftCorner.CornerRadius = UDim.new(0,16)
-    leftCorner.Parent = LeftContainer
-
-    local LeftDivider = Instance.new("Frame")
-    LeftDivider.Name = "LeftDivider"
-    LeftDivider.Size = UDim2.new(0, 1, 1, 0)
-    LeftDivider.Position = UDim2.new(1, 0, 0, 0)
-    LeftDivider.AnchorPoint = Vector2.new(1, 0)
-    LeftDivider.BackgroundColor3 = CurrentTheme.Stroke
-    LeftDivider.BackgroundTransparency = 0.5
-    LeftDivider.BorderSizePixel = 0
-    LeftDivider.ZIndex = 2
-    LeftDivider.Parent = LeftContainer
-    table.insert(ThemeListeners, function() LeftDivider.BackgroundColor3 = CurrentTheme.Stroke end)
-
-    local TabScroll = Instance.new("ScrollingFrame")
-    TabScroll.Size = UDim2.new(1,0,1,-55)
-    TabScroll.Position = UDim2.new(0,0,0,0)
-    TabScroll.BackgroundTransparency = 1
-    TabScroll.ScrollBarThickness = 0
-    TabScroll.ScrollingDirection = Enum.ScrollingDirection.Y
-    TabScroll.Parent = LeftContainer
+    local LeftScrollingFrame = Instance.new("ScrollingFrame")
+    LeftScrollingFrame.Size = UDim2.new(1, -10, 1, -115)
+    LeftScrollingFrame.Position = UDim2.new(0.5, 0, 0, 60)
+    LeftScrollingFrame.AnchorPoint = Vector2.new(0.5, 0)
+    LeftScrollingFrame.BackgroundTransparency = 1
+    LeftScrollingFrame.ScrollBarThickness = 0
+    LeftScrollingFrame.Parent = LeftMenuFrame
 
     local TabList = Instance.new("UIListLayout")
-    TabList.Padding = UDim.new(0,4)
-    TabList.SortOrder = Enum.SortOrder.LayoutOrder
     TabList.HorizontalAlignment = Enum.HorizontalAlignment.Center
-    TabList.Parent = TabScroll
+    TabList.SortOrder = Enum.SortOrder.LayoutOrder
+    TabList.Padding = UDim.new(0, 5)
+    TabList.Parent = LeftScrollingFrame
 
     local function updateTabCanvas()
-        TabScroll.CanvasSize = UDim2.new(0,0,0, TabList.AbsoluteContentSize.Y + 20)
+        LeftScrollingFrame.CanvasSize = UDim2.new(0,0,0, TabList.AbsoluteContentSize.Y + 10)
     end
     TabList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(updateTabCanvas)
     task.spawn(updateTabCanvas)
 
-    Window._currentCategory = nil
+    local BottomFrame = Instance.new("Frame")
+    BottomFrame.Size = UDim2.new(1, 0, 0, 50)
+    BottomFrame.Position = UDim2.new(0, 0, 1, 0)
+    BottomFrame.AnchorPoint = Vector2.new(0, 1)
+    BottomFrame.BackgroundTransparency = 1
+    BottomFrame.Parent = LeftMenuFrame
 
+    local AccountProfile = Instance.new("ImageLabel")
+    AccountProfile.Size = UDim2.new(0, 35, 0, 35)
+    AccountProfile.Position = UDim2.new(0, 10, 0.5, -17.5)
+    AccountProfile.BackgroundTransparency = 1
+    AccountProfile.Image = Players:GetUserThumbnailAsync(LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150)
+    AccountProfile.Parent = BottomFrame
+    AddToRegistry(AccountProfile, "ImageColor3", "Text")
+    Instance.new("UICorner", AccountProfile).CornerRadius = UDim.new(1,0)
+
+    local AccountName = Instance.new("TextLabel")
+    AccountName.Size = UDim2.new(0, 120, 0, 25)
+    AccountName.Position = UDim2.new(0, 55, 0, 5)
+    AccountName.BackgroundTransparency = 1
+    AccountName.Font = Enum.Font.GothamBold
+    AccountName.Text = LocalPlayer.DisplayName
+    AccountName.TextSize = 14
+    AccountName.TextXAlignment = Enum.TextXAlignment.Left
+    AccountName.Parent = BottomFrame
+    AddToRegistry(AccountName, "TextColor3", "Text")
+
+    local ExpireLabel = Instance.new("TextLabel")
+    ExpireLabel.Size = UDim2.new(0, 120, 0, 15)
+    ExpireLabel.Position = UDim2.new(0, 55, 0, 25)
+    ExpireLabel.BackgroundTransparency = 1
+    ExpireLabel.Font = Enum.Font.GothamMedium
+    ExpireLabel.Text = "never"
+    ExpireLabel.TextSize = 10
+    ExpireLabel.TextTransparency = 0.65
+    ExpireLabel.TextXAlignment = Enum.TextXAlignment.Left
+    ExpireLabel.Parent = BottomFrame
+    AddToRegistry(ExpireLabel, "TextColor3", "SubText")
+
+    local UserSettingButton = Instance.new("ImageLabel")
+    UserSettingButton.Size = UDim2.new(0, 25, 0, 25)
+    UserSettingButton.Position = UDim2.new(1, -7, 0.5, -12.5)
+    UserSettingButton.AnchorPoint = Vector2.new(1, 0.5)
+    UserSettingButton.BackgroundTransparency = 1
+    UserSettingButton.Image = "rbxassetid://134724289526879"
+    UserSettingButton.ImageTransparency = 0.5
+    UserSettingButton.Parent = BottomFrame
+    AddToRegistry(UserSettingButton, "ImageColor3", "Text")
+
+    local LineFrame_2 = Instance.new("Frame")
+    LineFrame_2.Size = UDim2.new(1, -10, 0, 1)
+    LineFrame_2.Position = UDim2.new(0.5, 0, 0, 0)
+    LineFrame_2.AnchorPoint = Vector2.new(0.5, 0)
+    LineFrame_2.BackgroundTransparency = 0.65
+    LineFrame_2.BorderSizePixel = 0
+    LineFrame_2.Parent = BottomFrame
+    AddToRegistry(LineFrame_2, "BackgroundColor3", "Stroke")
+
+    -- 右侧内容区
+    local RightMenuFrame = Instance.new("Frame")
+    RightMenuFrame.Size = UDim2.new(1, -176, 1, 0)
+    RightMenuFrame.Position = UDim2.new(0, 176, 0, 0)
+    RightMenuFrame.BackgroundTransparency = 0.6
+    RightMenuFrame.ClipsDescendants = true
+    RightMenuFrame.Parent = MainFrame
+    Instance.new("UICorner", RightMenuFrame).CornerRadius = UDim.new(0, 13)
+    AddToRegistry(RightMenuFrame, "BackgroundColor3", "Main")
+
+    local RightStroke = Instance.new("UIStroke")
+    RightStroke.Thickness = 1
+    RightStroke.Transparency = 0.65
+    RightStroke.Parent = RightMenuFrame
+    AddToRegistry(RightStroke, "Color", "Stroke")
+
+    local RightHeader = Instance.new("Frame")
+    RightHeader.Size = UDim2.new(1, 0, 0, 50)
+    RightHeader.BackgroundTransparency = 1
+    RightHeader.Parent = RightMenuFrame
+
+    local LineFrame_3 = Instance.new("Frame")
+    LineFrame_3.Size = UDim2.new(1, -10, 0, 1)
+    LineFrame_3.Position = UDim2.new(0.5, 0, 1, 0)
+    LineFrame_3.AnchorPoint = Vector2.new(0.5, 1)
+    LineFrame_3.BackgroundTransparency = 0.65
+    LineFrame_3.BorderSizePixel = 0
+    LineFrame_3.Parent = RightHeader
+    AddToRegistry(LineFrame_3, "BackgroundColor3", "Stroke")
+
+    local ConfigFrame = Instance.new("Frame")
+    ConfigFrame.Size = UDim2.new(0, 115, 0, 30)
+    ConfigFrame.Position = UDim2.new(0, 10, 0.5, -15)
+    ConfigFrame.AnchorPoint = Vector2.new(0, 0.5)
+    ConfigFrame.BackgroundTransparency = 0.75
+    ConfigFrame.ClipsDescendants = true
+    ConfigFrame.Parent = RightHeader
+    Instance.new("UICorner", ConfigFrame).CornerRadius = UDim.new(0, 4)
+    AddToRegistry(ConfigFrame, "BackgroundColor3", "Element")
+
+    local ConfigIcon = Instance.new("ImageLabel")
+    ConfigIcon.Size = UDim2.new(0, 25, 0, 25)
+    ConfigIcon.Position = UDim2.new(0, 2, 0.5, -12.5)
+    ConfigIcon.BackgroundTransparency = 1
+    ConfigIcon.Image = "rbxassetid://6031090998"
+    ConfigIcon.ImageTransparency = 0.25
+    ConfigIcon.Parent = ConfigFrame
+    AddToRegistry(ConfigIcon, "ImageColor3", "Text")
+
+    local ConfigName = Instance.new("TextLabel")
+    ConfigName.Size = UDim2.new(1, -7, 0, 15)
+    ConfigName.Position = UDim2.new(0, 40, 0.5, -7.5)
+    ConfigName.BackgroundTransparency = 1
+    ConfigName.Font = Enum.Font.GothamMedium
+    ConfigName.Text = "Default"
+    ConfigName.TextSize = 12
+    ConfigName.TextTransparency = 0.35
+    ConfigName.TextXAlignment = Enum.TextXAlignment.Left
+    ConfigName.Parent = ConfigFrame
+    AddToRegistry(ConfigName, "TextColor3", "Text")
+
+    local SearchFrame = Instance.new("Frame")
+    SearchFrame.Size = UDim2.new(0, 30, 0, 30)
+    SearchFrame.Position = UDim2.new(1, -45, 0.5, -15)
+    SearchFrame.AnchorPoint = Vector2.new(1, 0.5)
+    SearchFrame.BackgroundTransparency = 1
+    SearchFrame.ClipsDescendants = true
+    SearchFrame.Parent = RightHeader
+
+    local SearchIcon = Instance.new("ImageLabel")
+    SearchIcon.Size = UDim2.new(0, 25, 0, 25)
+    SearchIcon.Position = UDim2.new(0, 2, 0.5, -12.5)
+    SearchIcon.BackgroundTransparency = 1
+    SearchIcon.Image = "rbxassetid://10734923549"
+    SearchIcon.ImageTransparency = 0.45
+    SearchIcon.Parent = SearchFrame
+    AddToRegistry(SearchIcon, "ImageColor3", "Text")
+
+    local SearchBox = Instance.new("TextBox")
+    SearchBox.Size = UDim2.new(1, -35, 0, 25)
+    SearchBox.Position = UDim2.new(0, 35, 0.5, -12.5)
+    SearchBox.BackgroundTransparency = 1
+    SearchBox.ClearTextOnFocus = false
+    SearchBox.Font = Enum.Font.GothamMedium
+    SearchBox.PlaceholderText = "Search"
+    SearchBox.Text = ""
+    SearchBox.TextSize = 13
+    SearchBox.TextTransparency = 1
+    SearchBox.TextXAlignment = Enum.TextXAlignment.Left
+    SearchBox.Parent = SearchFrame
+    AddToRegistry(SearchBox, "TextColor3", "Text")
+    SearchBox.Visible = false
+
+    local CloseButton = Instance.new("ImageLabel")
+    CloseButton.Size = UDim2.new(0, 30, 0, 30)
+    CloseButton.Position = UDim2.new(1, -10, 0.5, -15)
+    CloseButton.AnchorPoint = Vector2.new(1, 0.5)
+    CloseButton.BackgroundTransparency = 1
+    CloseButton.Image = "rbxassetid://130510492706892"
+    CloseButton.ImageTransparency = 0.45
+    CloseButton.Parent = RightHeader
+    AddToRegistry(CloseButton, "ImageColor3", "Text")
+
+    -- 内容容器
+    local TabContainer = Instance.new("Frame")
+    TabContainer.Size = UDim2.new(1, 0, 1, -50)
+    TabContainer.Position = UDim2.new(0, 0, 0, 50)
+    TabContainer.BackgroundTransparency = 1
+    TabContainer.ClipsDescendants = true
+    TabContainer.Parent = RightMenuFrame
+
+    local PageContainer = Instance.new("ScrollingFrame")
+    PageContainer.Size = UDim2.new(1, 0, 1, 0)
+    PageContainer.BackgroundTransparency = 1
+    PageContainer.ScrollBarThickness = 0
+    PageContainer.ScrollingEnabled = true
+    PageContainer.Parent = TabContainer
+
+    local PageContent = Instance.new("Frame")
+    PageContent.Size = UDim2.new(1, 0, 0, 0)
+    PageContent.AutomaticSize = Enum.AutomaticSize.Y
+    PageContent.BackgroundTransparency = 1
+    PageContent.Parent = PageContainer
+
+    local PageList = Instance.new("UIListLayout")
+    PageList.Padding = UDim.new(0, 10)
+    PageList.SortOrder = Enum.SortOrder.LayoutOrder
+    PageList.Parent = PageContent
+
+    local function updatePageCanvas()
+        PageContainer.CanvasSize = UDim2.new(0,0,0, PageList.AbsoluteContentSize.Y + 10)
+    end
+    PageList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(updatePageCanvas)
+    task.spawn(updatePageCanvas)
+
+    -- 拖动
+    local dragToggle = false
+    local dragStart, startPos
+    local function updateDrag(input)
+        local delta = input.Position - dragStart
+        local position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X,
+                                   startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        MainFrame.Position = position
+    end
+    HeadFrame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragToggle = true
+            dragStart = input.Position
+            startPos = MainFrame.Position
+            local input_end
+            input_end = input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragToggle = false
+                    input_end:Disconnect()
+                end
+            end)
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if dragToggle and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            updateDrag(input)
+        end
+    end)
+
+    -- 窗口动画
+    local function AnimateWindowIn()
+        MainFrame.Visible = true
+        TweenService:Create(MainFrame, TweenInfo.new(0.6, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+            Size = UDim2.new(0, FINAL_WIDTH, 0, FINAL_HEIGHT)
+        }):Play()
+    end
+    task.delay(0.1, AnimateWindowIn)
+
+    -- 浮动打开按钮
+    local OpenButton = Instance.new("ImageButton")
+    OpenButton.Name = "FloatingOpenButton"
+    OpenButton.Parent = ScreenGui
+    OpenButton.BackgroundColor3 = CurrentTheme.Accent
+    OpenButton.BackgroundTransparency = 0.85
+    OpenButton.Position = UDim2.new(0.92,0,0.01,0)
+    OpenButton.Size = UDim2.new(0,40,0,40)
+    OpenButton.Active = true
+    OpenButton.Draggable = true
+    OpenButton.Image = "rbxassetid://84830962019412"
+    OpenButton.ImageColor3 = Color3.fromRGB(255,255,255)
+    OpenButton.ImageTransparency = 0.15
+    OpenButton.ZIndex = 10
+    Instance.new("UICorner", OpenButton).CornerRadius = UDim.new(0,8)
+    local openStroke = Instance.new("UIStroke")
+    openStroke.Parent = OpenButton
+    openStroke.Color = Color3.fromRGB(180,180,180)
+    openStroke.Thickness = 1.2
+    openStroke.Transparency = 0.4
+    OpenButton.MouseButton1Click:Connect(function()
+        if MainFrame.Visible then
+            MainFrame.Visible = false
+            OpenButton.Visible = true
+        else
+            MainFrame.Visible = true
+            OpenButton.Visible = false
+            MainFrame.Size = UDim2.new(0, FINAL_WIDTH, 0, FINAL_HEIGHT)
+        end
+    end)
+    MainFrame:GetPropertyChangedSignal("Visible"):Connect(function()
+        OpenButton.Visible = not MainFrame.Visible
+    end)
+    OpenButton.Visible = false
+    MainFrame.Visible = true
+
+    -- 键盘绑定
+    UserInputService.InputBegan:Connect(function(input, gpe)
+        if not gpe and Keybind and input.KeyCode == Keybind then
+            MainFrame.Visible = not MainFrame.Visible
+        end
+    end)
+
+    -- ===== 重写 Window:Category 和 Window:Tab =====
+    Window._currentCategory = nil
     function Window:Category(config)
         local name = type(config)=="table" and config.Name or config
         local collapsible = type(config)=="table" and config.Collapsible or false
         local opened = true
         if type(config)=="table" and config.Opened ~= nil then opened = config.Opened end
+
         local categoryFrame = Instance.new("Frame")
         categoryFrame.Size = UDim2.new(1,0,0,0)
         categoryFrame.AutomaticSize = Enum.AutomaticSize.Y
         categoryFrame.BackgroundTransparency = 1
-        categoryFrame.Parent = TabScroll
+        categoryFrame.Parent = LeftScrollingFrame
+
         local catLayout = Instance.new("UIListLayout")
         catLayout.FillDirection = Enum.FillDirection.Vertical
         catLayout.SortOrder = Enum.SortOrder.LayoutOrder
         catLayout.Padding = UDim.new(0,0)
         catLayout.Parent = categoryFrame
+
         local header = Instance.new("TextButton")
         header.Size = UDim2.new(1,0,0,28)
         header.BackgroundTransparency = 1
@@ -3775,6 +3788,7 @@ function Fenglib:CreateWindow(Config)
         pad.PaddingLeft = UDim.new(0,10)
         pad.Parent = header
         AddToRegistry(header, "TextColor3", "Text")
+
         local arrow = Instance.new("ImageLabel")
         arrow.Size = UDim2.new(0,12,0,12)
         arrow.BackgroundTransparency = 1
@@ -3787,6 +3801,7 @@ function Fenglib:CreateWindow(Config)
         arrow.AnchorPoint = Vector2.new(1,0.5)
         arrow.Position = UDim2.new(1,-10,0.5,0)
         AddToRegistry(arrow, "ImageColor3", "Text")
+
         local content = Instance.new("Frame")
         content.Size = UDim2.new(1,0,0,0)
         content.BackgroundTransparency = 1
@@ -3794,11 +3809,13 @@ function Fenglib:CreateWindow(Config)
         content.ClipsDescendants = true
         content.Visible = true
         content.Parent = categoryFrame
+
         local contentList = Instance.new("UIListLayout")
         contentList.Padding = UDim.new(0,4)
         contentList.SortOrder = Enum.SortOrder.LayoutOrder
         contentList.HorizontalAlignment = Enum.HorizontalAlignment.Center
         contentList.Parent = content
+
         local currentTween = nil
         local function getContentHeight() return contentList.AbsoluteContentSize.Y or 0 end
         local function setContentHeight(targetHeight, animate)
@@ -3814,6 +3831,7 @@ function Fenglib:CreateWindow(Config)
                 task.spawn(updateTabCanvas)
             end
         end
+
         local function toggleCategory()
             if not collapsible then return end
             opened = not opened
@@ -3821,6 +3839,7 @@ function Fenglib:CreateWindow(Config)
             local targetHeight = opened and getContentHeight() or 0
             setContentHeight(targetHeight, true)
         end
+
         header.MouseButton1Click:Connect(toggleCategory)
         contentList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
             if opened then
@@ -3835,297 +3854,50 @@ function Fenglib:CreateWindow(Config)
             content.Size = UDim2.new(1,0,0,initialHeight)
             updateTabCanvas()
         end)
+
         Window._currentCategory = {frame=categoryFrame, content=content, contentList=contentList, header=header, label=header, arrow=arrow, collapsible=collapsible, opened=opened, toggle=toggleCategory}
         table.insert(ThemeListeners, function() header.TextColor3=CurrentTheme.Text; arrow.ImageColor3=CurrentTheme.Text end)
         return Window._currentCategory
     end
 
-    function Window:TabDivider()
-        local parentContainer = TabScroll
-        if Window._currentCategory then parentContainer = Window._currentCategory.content end
-        local line = Instance.new("Frame")
-        line.Size = UDim2.new(1,-20,0,1)
-        line.Position = UDim2.new(0,10,0,0)
-        line.BackgroundColor3 = CurrentTheme.Stroke
-        line.BackgroundTransparency = 0.5
-        line.BorderSizePixel = 0
-        line.Parent = parentContainer
-        AddToRegistry(line, "BackgroundColor3", "Stroke")
-        table.insert(ThemeListeners, function() line.BackgroundColor3 = CurrentTheme.Stroke end)
-    end
-
-    local ProfileFrame = Instance.new("Frame")
-    ProfileFrame.Size = UDim2.new(0,140,0,40)
-    ProfileFrame.Position = UDim2.new(0,10,1,-10)
-    ProfileFrame.AnchorPoint = Vector2.new(0,1)
-    ProfileFrame.BackgroundTransparency = 0.05
-    ProfileFrame.Parent = LeftContainer
-    Instance.new("UICorner", ProfileFrame).CornerRadius = UDim.new(0,10)
-    AddToRegistry(ProfileFrame, "BackgroundColor3", "Top")
-
-    local Avatar = Instance.new("ImageLabel")
-    Avatar.Size = UDim2.new(0,26,0,26)
-    Avatar.Position = UDim2.new(0,8,0.5,-13)
-    Avatar.BackgroundColor3 = Color3.fromRGB(20,20,20)
-    Avatar.Image = Players:GetUserThumbnailAsync(LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size48x48)
-    Avatar.Parent = ProfileFrame
-    Instance.new("UICorner", Avatar).CornerRadius = UDim.new(1,0)
-
-    local realDisplayName = LocalPlayer.DisplayName
-    local realUsername = "@"..LocalPlayer.Name
-
-    local DispName = Instance.new("TextLabel")
-    DispName.Text = realDisplayName
-    DispName.Size = UDim2.new(1,-45,0,15)
-    DispName.Position = UDim2.new(0,40,0,5)
-    DispName.BackgroundTransparency = 1
-    DispName.Font = Enum.Font.GothamMedium
-    DispName.TextSize = 11
-    DispName.TextXAlignment = Enum.TextXAlignment.Left
-    DispName.Parent = ProfileFrame
-    AddToRegistry(DispName, "TextColor3", "Text")
-
-    local UsrName = Instance.new("TextLabel")
-    UsrName.Text = realUsername
-    UsrName.Size = UDim2.new(1,-45,0,15)
-    UsrName.Position = UDim2.new(0,40,0,19)
-    UsrName.BackgroundTransparency = 1
-    UsrName.Font = Enum.Font.Gotham
-    UsrName.TextSize = 10
-    UsrName.TextTransparency = 0.5
-    UsrName.TextXAlignment = Enum.TextXAlignment.Left
-    UsrName.Parent = ProfileFrame
-    AddToRegistry(UsrName, "TextColor3", "Text")
-
-    local AnonBtn = Instance.new("TextButton")
-    AnonBtn.Size = UDim2.new(0,18,0,18)
-    AnonBtn.Position = UDim2.new(1,-6,0.5,0)
-    AnonBtn.AnchorPoint = Vector2.new(1,0.5)
-    AnonBtn.BackgroundTransparency = 0.7
-    AnonBtn.Text = ""
-    AnonBtn.Parent = ProfileFrame
-    Instance.new("UICorner", AnonBtn).CornerRadius = UDim.new(1,0)
-    AddToRegistry(AnonBtn, "BackgroundColor3", "Top")
-
-    local EyeIcon = Instance.new("ImageLabel")
-    EyeIcon.Size = UDim2.new(1,0,1,0)
-    EyeIcon.BackgroundTransparency = 1
-    EyeIcon.Image = "rbxassetid://10723346959"
-    EyeIcon.ImageColor3 = CurrentTheme.Text
-    EyeIcon.ImageTransparency = 0.3
-    EyeIcon.Parent = AnonBtn
-    AddToRegistry(EyeIcon, "ImageColor3", "Text")
-
-    local anonActive = false
-    local function setAnon(active)
-        anonActive = active
-        if active then
-            DispName.Text = "脚本杀手"
-            UsrName.Text = "@•••••••"
-            EyeIcon.Image = "rbxassetid://10723346871"
-        else
-            DispName.Text = realDisplayName
-            UsrName.Text = realUsername
-            EyeIcon.Image = "rbxassetid://10723346959"
-        end
-    end
-    AnonBtn.MouseButton1Click:Connect(function() setAnon(not anonActive) end)
-    table.insert(ThemeListeners, function() AnonBtn.BackgroundColor3=CurrentTheme.Top; EyeIcon.ImageColor3=CurrentTheme.Text end)
-
-    -- ========== 右侧主容器（miUI 风格，无配置/搜索，有三按钮） ==========
-    local RightContainer = Instance.new("Frame")
-    RightContainer.Name = "RightContainer"
-    RightContainer.Size = UDim2.new(1, -leftWidth, 1, -topbarHeight)
-    RightContainer.Position = UDim2.new(0, leftWidth, 0, topbarHeight)
-    RightContainer.BackgroundColor3 = CurrentTheme.Main
-    RightContainer.BackgroundTransparency = 0.6
-    RightContainer.ClipsDescendants = true
-    RightContainer.Parent = MainFrame
-    local rightCorner = Instance.new("UICorner")
-    rightCorner.CornerRadius = UDim.new(0, 13)
-    rightCorner.Parent = RightContainer
-    AddToRegistry(RightContainer, "BackgroundColor3", "Main")
-
-    -- 边框
-    local RightStroke = Instance.new("UIStroke")
-    RightStroke.Transparency = 0.65
-    RightStroke.Color = CurrentTheme.Stroke
-    RightStroke.Parent = RightContainer
-    table.insert(ThemeListeners, function() RightStroke.Color = CurrentTheme.Stroke end)
-
-    -- ========== 右侧头部（仅含三个控制按钮） ==========
-    local RightHeader = Instance.new("Frame")
-    RightHeader.Name = "RightHeader"
-    RightHeader.Size = UDim2.new(1, 0, 0, 50)
-    RightHeader.BackgroundTransparency = 1
-    RightHeader.Parent = RightContainer
-
-    -- 分割线
-    local HeaderLine = Instance.new("Frame")
-    HeaderLine.Name = "HeaderLine"
-    HeaderLine.AnchorPoint = Vector2.new(0.5, 1)
-    HeaderLine.Position = UDim2.new(0.5, 0, 1, 0)
-    HeaderLine.Size = UDim2.new(1, -10, 0, 1)
-    HeaderLine.BackgroundColor3 = CurrentTheme.Stroke
-    HeaderLine.BackgroundTransparency = 0.65
-    HeaderLine.BorderSizePixel = 0
-    HeaderLine.Parent = RightHeader
-    table.insert(ThemeListeners, function() HeaderLine.BackgroundColor3 = CurrentTheme.Stroke end)
-
-    -- 按钮容器（靠右排列）
-    local ButtonContainer = Instance.new("Frame")
-    ButtonContainer.Name = "ButtonContainer"
-    ButtonContainer.Size = UDim2.new(0, 120, 1, 0)
-    ButtonContainer.Position = UDim2.new(1, -10, 0.5, 0)
-    ButtonContainer.AnchorPoint = Vector2.new(1, 0.5)
-    ButtonContainer.BackgroundTransparency = 1
-    ButtonContainer.Parent = RightHeader
-
-    local btnLayout = Instance.new("UIListLayout")
-    btnLayout.FillDirection = Enum.FillDirection.Horizontal
-    btnLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
-    btnLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-    btnLayout.Padding = UDim.new(0, 5)
-    btnLayout.Parent = ButtonContainer
-
-    -- 辅助：创建控制按钮
-    local function createCtrlButton(icon, color, callback)
-        local btn = Instance.new("ImageButton")
-        btn.Size = UDim2.new(0, 30, 0, 30)
-        btn.BackgroundTransparency = 1
-        btn.Image = icon
-        btn.ImageColor3 = color or CurrentTheme.Text
-        btn.ImageTransparency = 0.45
-        btn.Parent = ButtonContainer
-        AddToRegistry(btn, "ImageColor3", "Text")
-        btn.MouseButton1Click:Connect(callback)
-        btn.MouseEnter:Connect(function()
-            Tween(btn, {ImageTransparency = 0.1}, 0.2)
-        end)
-        btn.MouseLeave:Connect(function()
-            Tween(btn, {ImageTransparency = 0.45}, 0.2)
-        end)
-        return btn
-    end
-
-    -- 1. 最小化
-    local minimizeBtn = createCtrlButton("rbxassetid://10734915041", nil, function()
-        MainFrame.Visible = false
-    end)
-
-    -- 2. 最大化/调整大小
-    local maximizeBtn = createCtrlButton("rbxassetid://6031090998", nil, function()
-        resizerVisible = not resizerVisible
-        Resizer.Visible = resizerVisible
-    end)
-
-    -- 3. 关闭（带确认）
-    local closeBtn = createCtrlButton("rbxassetid://130510492706892", nil, function()
-        if Window.Dialog then
-            Window:Dialog({
-                Title = "Close Window",
-                Content = "Are you sure you want to close this window?",
-                Buttons = {
-                    {Text = "Cancel", ReturnValue = false},
-                    {Text = "Yes", Primary = true, ReturnValue = true}
-                },
-                Callback = function(result)
-                    if result then
-                        Window:Destroy()
-                    end
-                end
-            })
-        else
-            Window:Notification("Closing", "Window destroyed", "Info", 1)
-            Window:Destroy()
-        end
-    end)
-
-    -- ========== 标签页内容容器 ==========
-    local TabContainer = Instance.new("Frame")
-    TabContainer.Name = "TabContainer"
-    TabContainer.Size = UDim2.new(1, 0, 1, -50)
-    TabContainer.Position = UDim2.new(0, 0, 0, 50)
-    TabContainer.BackgroundTransparency = 1
-    TabContainer.ClipsDescendants = true
-    TabContainer.Parent = RightContainer
-
-    -- 注意：原 PageContainer 已删除，各 Tab 的 ScrollingFrame 将直接放入 TabContainer
-
-    -- ========== Window:Tab 函数（修改 Page 父级为 TabContainer） ==========
+    Window._activeTab = nil
+    Window._tabs = {}
     function Window:Tab(name, icon)
-        local parentContainer = TabScroll
+        local parentContainer = LeftScrollingFrame
         local parentList = TabList
         if Window._currentCategory then
             parentContainer = Window._currentCategory.content
             parentList = Window._currentCategory.contentList
         end
+
         local TabBtn = Instance.new("TextButton")
-        TabBtn.Size = UDim2.new(0,140,0,32)
-        TabBtn.BackgroundTransparency = 1
+        TabBtn.Size = UDim2.new(1, -7, 0, 30)
+        TabBtn.BackgroundTransparency = 0.5
         TabBtn.BackgroundColor3 = CurrentTheme.Top
         TabBtn.Text = ""
         TabBtn.Parent = parentContainer
-        Instance.new("UICorner", TabBtn).CornerRadius = UDim.new(0,10)
-        local glowFrame = Instance.new("Frame")
-        glowFrame.Name = "GlowBackground"
-        glowFrame.Size = UDim2.new(1,0,1,0)
-        glowFrame.BackgroundColor3 = CurrentTheme.Accent
-        glowFrame.BackgroundTransparency = 1
-        glowFrame.Parent = TabBtn
-        local glowCorner = Instance.new("UICorner")
-        glowCorner.CornerRadius = UDim.new(0,10)
-        glowCorner.Parent = glowFrame
-        local glowGrad = Instance.new("UIGradient")
-        glowGrad.Rotation = 0
-        glowGrad.Color = ColorSequence.new(CurrentTheme.Accent, CurrentTheme.Accent)
-        glowGrad.Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0,0.55), NumberSequenceKeypoint.new(1,1)})
-        glowGrad.Parent = glowFrame
-        local TabBar = Instance.new("Frame")
-        TabBar.Size = UDim2.new(0,3,0,0)
-        TabBar.Position = UDim2.new(0,0,0.175,0)
-        TabBar.BackgroundTransparency = 1
-        TabBar.BorderSizePixel = 0
-        TabBar.Parent = TabBtn
-        Instance.new("UICorner", TabBar).CornerRadius = UDim.new(1,0)
-        AddToRegistry(TabBar, "BackgroundColor3", "Accent")
-        local ContentFrame = Instance.new("Frame")
-        ContentFrame.Name = "ContentFrame"
-        ContentFrame.Size = UDim2.new(1,0,1,0)
-        ContentFrame.BackgroundTransparency = 1
-        ContentFrame.Parent = TabBtn
-        local Layout = Instance.new("UIListLayout")
-        Layout.FillDirection = Enum.FillDirection.Horizontal
-        Layout.HorizontalAlignment = Enum.HorizontalAlignment.Left
-        Layout.VerticalAlignment = Enum.VerticalAlignment.Center
-        Layout.Padding = UDim.new(0,5)
-        Layout.Parent = ContentFrame
-        local Padding = Instance.new("UIPadding")
-        Padding.PaddingLeft = UDim.new(0,10)
-        Padding.Parent = ContentFrame
-        if icon then
-            local TabIcon = Instance.new("ImageLabel")
-            TabIcon.Size = UDim2.new(0,28,0,28)
-            TabIcon.BackgroundTransparency = 1
-            if tonumber(icon) then TabIcon.Image = "rbxassetid://"..icon else TabIcon.Image = icon end
-            TabIcon.Parent = ContentFrame
-            AddToRegistry(TabIcon, "ImageColor3", "Text")
-            local iconCorner = Instance.new("UICorner")
-            iconCorner.CornerRadius = UDim.new(0,8)
-            iconCorner.Parent = TabIcon
-        end
+        Instance.new("UICorner", TabBtn).CornerRadius = UDim.new(0, 6)
+
         local TabText = Instance.new("TextLabel")
-        local textWidth = TextService:GetTextSize(name, 14, Enum.Font.GothamMedium, Vector2.new(200,32)).X
-        TabText.Size = UDim2.new(0,textWidth,1,0)
+        TabText.Size = UDim2.new(1, -7, 0, 15)
+        TabText.Position = UDim2.new(0, 30, 0.5, -7.5)
         TabText.BackgroundTransparency = 1
         TabText.Font = Enum.Font.GothamMedium
         TabText.Text = name
-        TabText.TextColor3 = CurrentTheme.Text
-        TabText.TextTransparency = 0.3
-        TabText.TextSize = 14
+        TabText.TextSize = 12
         TabText.TextXAlignment = Enum.TextXAlignment.Left
-        TabText.Parent = ContentFrame
+        TabText.Parent = TabBtn
         AddToRegistry(TabText, "TextColor3", "Text")
+
+        if icon then
+            local TabIcon = Instance.new("ImageLabel")
+            TabIcon.Size = UDim2.new(0, 25, 0, 25)
+            TabIcon.Position = UDim2.new(0, 2, 0.5, -12.5)
+            TabIcon.BackgroundTransparency = 1
+            if tonumber(icon) then TabIcon.Image = "rbxassetid://"..icon else TabIcon.Image = icon end
+            TabIcon.Parent = TabBtn
+            AddToRegistry(TabIcon, "ImageColor3", "Accent")
+        end
 
         local Page = Instance.new("ScrollingFrame")
         Page.Size = UDim2.new(1, 0, 1, 0)
@@ -4133,76 +3905,54 @@ function Fenglib:CreateWindow(Config)
         Page.ScrollBarThickness = 0
         Page.ScrollingEnabled = true
         Page.Visible = false
-        Page.Parent = TabContainer   -- 关键：放入右侧 TabContainer
-        local pageCorner = Instance.new("UICorner")
-        pageCorner.CornerRadius = UDim.new(0,16)
-        pageCorner.Parent = Page
-        Page.ClipsDescendants = true
-        local PageContent = Instance.new("Frame")
-        PageContent.Size = UDim2.new(1,0,0,0)
-        PageContent.AutomaticSize = Enum.AutomaticSize.Y
-        PageContent.BackgroundTransparency = 1
-        PageContent.Parent = Page
-        local PageList = Instance.new("UIListLayout")
-        PageList.Padding = UDim.new(0,10)
-        PageList.SortOrder = Enum.SortOrder.LayoutOrder
-        PageList.Parent = PageContent
-        local function updatePageCanvas()
-            Page.CanvasSize = UDim2.new(0,0,0, PageList.AbsoluteContentSize.Y + 10)
-        end
-        PageList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(updatePageCanvas)
-        task.spawn(updatePageCanvas)
+        Page.Parent = PageContainer
 
-        local state = {isActive=false, btn=TabBtn, page=Page, textLabel=TabText, bar=TabBar, glow=glowFrame}
+        local PageContentInner = Instance.new("Frame")
+        PageContentInner.Size = UDim2.new(1, 0, 0, 0)
+        PageContentInner.AutomaticSize = Enum.AutomaticSize.Y
+        PageContentInner.BackgroundTransparency = 1
+        PageContentInner.Parent = Page
+
+        local PageListInner = Instance.new("UIListLayout")
+        PageListInner.Padding = UDim.new(0, 10)
+        PageListInner.SortOrder = Enum.SortOrder.LayoutOrder
+        PageListInner.Parent = PageContentInner
+
+        local function updatePageCanvasInner()
+            Page.CanvasSize = UDim2.new(0,0,0, PageListInner.AbsoluteContentSize.Y + 10)
+        end
+        PageListInner:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(updatePageCanvasInner)
+        task.spawn(updatePageCanvasInner)
+
+        local state = {isActive=false, btn=TabBtn, page=Page, textLabel=TabText}
         TabBtn.MouseButton1Click:Connect(function()
             if Window._activeTab and Window._activeTab == state then return end
             for _, s in ipairs(Window._tabs) do
-                s.btn.BackgroundTransparency = 1
                 s.isActive = false
-                s.glow.BackgroundTransparency = 1
-                local bar = s.bar
-                if bar then Tween(bar, {BackgroundTransparency=1, Size=UDim2.new(0,3,0,0)}, 0.2) end
-                local txt = s.textLabel
-                if txt then Tween(txt, {TextTransparency=0.3}, 0.2) end
+                s.btn.BackgroundTransparency = 0.5
+                s.page.Visible = false
+                s.textLabel.TextTransparency = 0.5
             end
-            TabBtn.BackgroundTransparency = 1
             state.isActive = true
-            state.glow.BackgroundTransparency = 0
-            if TabBar then Tween(TabBar, {BackgroundTransparency=0, Size=UDim2.new(0,3,0.65,0)}, 0.2) end
-            Tween(TabText, {TextTransparency=0}, 0.2)
-            if Window._activeTab then Window._activeTab.page.Visible = false end
-            Page.Visible = true
-            Tween(Page, {Position=UDim2.new(0,0,0,0)}, 0.5)
+            state.btn.BackgroundTransparency = 0.5
+            state.btn.BackgroundColor3 = CurrentTheme.Hover
+            state.page.Visible = true
+            state.textLabel.TextTransparency = 0
             Window._activeTab = state
         end)
         if not Window._activeTab then
-            TabBtn.BackgroundTransparency = 1
             state.isActive = true
-            state.glow.BackgroundTransparency = 0
-            TabBar.BackgroundTransparency = 0
-            TabBar.Size = UDim2.new(0,3,0.65,0)
-            TabText.TextTransparency = 0
-            Page.Visible = true
-            Page.Position = UDim2.new(0,0,0,0)
+            state.btn.BackgroundTransparency = 0.5
+            state.btn.BackgroundColor3 = CurrentTheme.Hover
+            state.page.Visible = true
+            state.textLabel.TextTransparency = 0
             Window._activeTab = state
         end
         table.insert(Window._tabs, state)
-        if name == "Config" then TabBtn.LayoutOrder = 99998 end
-        if name == "Settings" then TabBtn.LayoutOrder = 99999 end
-        table.insert(ThemeListeners, function()
-            for _, s in ipairs(Window._tabs) do
-                local glow = s.glow
-                if glow then
-                    glow.BackgroundColor3 = CurrentTheme.Accent
-                    local grad = glow:FindFirstChildOfClass("UIGradient")
-                    if grad then grad.Color = ColorSequence.new(CurrentTheme.Accent, CurrentTheme.Accent) end
-                end
-                s.btn.BackgroundTransparency = 1
-            end
-        end)
-        local getElements = function()
+
+        local function getElements()
             local elements = {}
-            local createSection = createSectionBuilder(PageContent, PageContent, 330, 1, Window)
+            local createSection = createSectionBuilder(PageContentInner, PageContentInner, 330, 1, Window)
             elements.Section    = function(_, config) return createSection(config) end
             elements.Button     = function(_, config) return createSection("", nil, true).Button(config) end
             elements.Toggle     = function(_, config) return createSection("", nil, true).Toggle(config) end
@@ -4228,11 +3978,8 @@ function Fenglib:CreateWindow(Config)
         return getElements()
     end
 
-    -- 其他原有功能保留（Notification, SetKeybind, Destroy, SetSubtitle 等）
-
+    -- ===== Notification =====
     function Window:Notification(titleText, descText, notifType, duration)
-        notifType = notifType or "Info"
-        duration = duration or 3
         local config = {Title=titleText, Description=descText, Duration=duration, Type=notifType}
         local title = config.Title or "Notification"
         local description = config.Description or ""
@@ -4367,24 +4114,16 @@ function Fenglib:CreateWindow(Config)
 
     function Window:SetKeybind(key) Keybind = key end
     function Window:Destroy()
-        safeDisconnect(animConn)
-        for _, fn in ipairs(WindowCleanup) do pcall(fn) end
         ScreenGui:Destroy()
     end
     function Window:SetSubtitle(newSubtitle)
-        for _, child in ipairs(Topbar:GetChildren()) do
-            if child:IsA("TextLabel") and child ~= TitleLabel then
-                child.Text = newSubtitle
-                break
-            end
-        end
+        WindowContent.Text = newSubtitle or ""
     end
 
-    -- 窗口默认显示
-    MainFrame.Visible = true
     return Window
 end
 
+-- ==================== 自定义光标模块 ====================
 do
     local cursorScreen = Instance.new("ScreenGui")
     cursorScreen.Name = "FengCustomCursor"
