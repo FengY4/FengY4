@@ -6,7 +6,7 @@
     [MOD] 移植 miUI 的透明度增强：
       - 背景模糊（DepthOfField + 动态 Part，已修复 PointToObjectSpace）
       - 窗口背景渐变（UIGradient）
-      - 动态描边透明度跟随主题
+      - 主窗口边框替换为 miUI 式多层阴影（移除硬边描边）
       - 窗口大小固定为 500×320
       - 背景图默认为空（不显示任何图片）
 ]]
@@ -3263,7 +3263,7 @@ function Fenglib:CreateWindow(Config)
     local Subtitle = Config.SubName
     local Keybind = Config.Keybind
     local IconAsset = Config.Logo
-    local SceneId = Config.Scene  -- [MOD] 不设默认值，让背景图为空
+    local SceneId = Config.Scene  -- 默认为 nil，背景图空
 
     if Config.Theme then
         if type(Config.Theme)=="string" then
@@ -3324,7 +3324,7 @@ function Fenglib:CreateWindow(Config)
     HolderPadding.PaddingBottom = UDim.new(0,5)
     HolderPadding.Parent = NotificationHolder
 
-    -- [MOD] 窗口大小固定为 500×320
+    -- 窗口大小固定为 500×320
     local FINAL_WIDTH = 500
     local FINAL_HEIGHT = 320
 
@@ -3339,13 +3339,52 @@ function Fenglib:CreateWindow(Config)
     MainFrame.Parent = ScreenGui
     Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 12)
     AddToRegistry(MainFrame, "BackgroundColor3", "Main")
-    local Stroke = Instance.new("UIStroke")
-    Stroke.Thickness = 1.5
-    Stroke.Transparency = 0.65
-    Stroke.Parent = MainFrame
-    AddToRegistry(Stroke, "Color", "Stroke")
 
-    -- [MOD] 添加背景渐变（模仿 miUI 的玻璃质感）
+    -- ===== [MOD] 移除原有的描边（UIStroke），替换为 miUI 风格的多层阴影 =====
+    local shadowStrokes = {}
+    local thicknesses = {6, 5, 4, 3}
+    for _, thick in ipairs(thicknesses) do
+        local stroke = Instance.new("UIStroke")
+        stroke.Thickness = thick
+        stroke.Color = Color3.new(1, 1, 1)
+        stroke.Transparency = 1
+        stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+        stroke.Parent = MainFrame
+        table.insert(shadowStrokes, stroke)
+    end
+
+    local function setShadowVisible(visible, instant)
+        local targetTrans = visible and 0.9 or 1
+        for _, stroke in ipairs(shadowStrokes) do
+            if instant then
+                stroke.Transparency = targetTrans
+            else
+                Tween(stroke, {Transparency = targetTrans}, 0.3)
+            end
+        end
+    end
+
+    -- 背景图（默认为空）
+    local bgImage = Instance.new("ImageLabel")
+    bgImage.Name = "FluentBG"
+    bgImage.Size = UDim2.new(1,0,1,0)
+    bgImage.BackgroundTransparency = 1
+    bgImage.ZIndex = 0
+    bgImage.Parent = MainFrame
+    Instance.new("UICorner", bgImage).CornerRadius = UDim.new(0,12)
+    if SceneId then
+        if type(SceneId)=="number" or (type(SceneId)=="string" and tonumber(SceneId)) then
+            bgImage.Image = "rbxassetid://"..tostring(SceneId)
+        else
+            bgImage.Image = tostring(SceneId)
+        end
+    else
+        bgImage.Image = ""
+        bgImage.Visible = false
+        bgImage.BackgroundTransparency = 1
+    end
+
+    -- 背景渐变
     local bgGradient = Instance.new("UIGradient")
     bgGradient.Name = "FengBgGradient"
     bgGradient.Color = ColorSequence.new({
@@ -3360,29 +3399,9 @@ function Fenglib:CreateWindow(Config)
     })
     bgGradient.Parent = MainFrame
 
-    -- [MOD] 背景图：默认为空，仅当 SceneId 存在时设置图片
-    local bgImage = Instance.new("ImageLabel")
-    bgImage.Name = "FluentBG"
-    bgImage.Size = UDim2.new(1,0,1,0)
-    bgImage.BackgroundTransparency = 1
-    bgImage.ZIndex = 0
-    bgImage.Parent = MainFrame
-    Instance.new("UICorner", bgImage).CornerRadius = UDim.new(0,12)
+    setShadowVisible(false, true)
 
-    if SceneId then
-        if type(SceneId)=="number" or (type(SceneId)=="string" and tonumber(SceneId)) then
-            bgImage.Image = "rbxassetid://"..tostring(SceneId)
-        else
-            bgImage.Image = tostring(SceneId)
-        end
-    else
-        bgImage.Image = ""  -- 空，不显示任何图片
-        bgImage.Visible = false  -- 可选：完全隐藏，但保留实例
-        -- 若保留但不可见，可维持透明度为1
-        bgImage.BackgroundTransparency = 1
-    end
-
-    -- Resizer
+    -- Resizer (保留)
     local Resizer = Instance.new("TextButton")
     Resizer.Name = "WindowResizer"
     Resizer.Parent = MainFrame
@@ -3426,7 +3445,7 @@ function Fenglib:CreateWindow(Config)
         end
     end)
 
-    -- [MOD] 背景模糊模块（移植自 miUI，已修复 PointToObjectSpace）
+    -- 背景模糊模块
     local function CreateBlurModule()
         if not MainFrame or not MainFrame.Parent then return end
         local Part = Instance.new("Part")
@@ -3486,7 +3505,6 @@ function Fenglib:CreateWindow(Config)
                 mesh = Instance.new("BlockMesh")
                 mesh.Parent = Part
             end
-            -- 修复：使用正确的 CFrame:PointToObjectSpace
             mesh.Offset = cam.CFrame:PointToObjectSpace(center)
             mesh.Scale = scale
             Part.Transparency = 0.97
@@ -3508,14 +3526,13 @@ function Fenglib:CreateWindow(Config)
             end
         end)
     end
-    -- 在窗口显示后调用模糊
     task.delay(0.3, function()
         if MainFrame and MainFrame.Parent then
             pcall(CreateBlurModule)
         end
     end)
 
-    -- 左侧菜单
+    -- 左侧菜单（完整）
     local LeftMenuFrame = Instance.new("Frame")
     LeftMenuFrame.Size = UDim2.new(0, 175, 1, 0)
     LeftMenuFrame.BackgroundTransparency = 1
@@ -3659,23 +3676,20 @@ function Fenglib:CreateWindow(Config)
     LineFrame_3.Parent = RightHeader
     AddToRegistry(LineFrame_3, "BackgroundColor3", "Stroke")
 
-    -- ===== 三按钮（完全取自 UI.lua） =====
-    local resizerVisible = false  -- 新增状态变量
-
+    -- 三按钮（与原来完全一致）
+    local resizerVisible = false
     local ButtonGroup = Instance.new("Frame")
     ButtonGroup.Name = "WindowButtons"
     ButtonGroup.Size = UDim2.new(0, 180, 1, 0)
     ButtonGroup.Position = UDim2.new(1, -190, 0, 0)
     ButtonGroup.BackgroundTransparency = 1
-    ButtonGroup.Parent = RightHeader  -- 与 Test.lua 原有父级一致
-
+    ButtonGroup.Parent = RightHeader
     local ButtonLayout = Instance.new("UIListLayout")
     ButtonLayout.FillDirection = Enum.FillDirection.Horizontal
     ButtonLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
     ButtonLayout.VerticalAlignment = Enum.VerticalAlignment.Center
     ButtonLayout.Padding = UDim.new(0, 5)
     ButtonLayout.Parent = ButtonGroup
-
     local ButtonPadding = Instance.new("UIPadding")
     ButtonPadding.PaddingRight = UDim.new(0, 10)
     ButtonPadding.Parent = ButtonGroup
@@ -3760,20 +3774,16 @@ function Fenglib:CreateWindow(Config)
         return btn
     end
 
-    -- 三个具体按钮（最小化、最大化、关闭）
     local MinimizeBtn = createControlButton(nil, "−", function()
         MainFrame.Visible = false
     end)
-
     local MaximizeBtn = createControlButton("rbxassetid://6031090998", nil, function()
         resizerVisible = not resizerVisible
         Resizer.Visible = resizerVisible
     end)
-
     local CloseBtn = createControlButton("rbxassetid://130510492706892", nil, function()
         ScreenGui:Destroy()
     end)
-    -- =============================================
 
     -- 内容容器
     local TabContainer = Instance.new("Frame")
@@ -3832,16 +3842,25 @@ function Fenglib:CreateWindow(Config)
         end
     end)
 
-    -- 窗口动画
+    -- 窗口动画与阴影联动
     local function AnimateWindowIn()
         MainFrame.Visible = true
         TweenService:Create(MainFrame, TweenInfo.new(0.6, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
             Size = UDim2.new(0, FINAL_WIDTH, 0, FINAL_HEIGHT)
         }):Play()
+        setShadowVisible(true, false)
     end
+    local function onWindowVisibilityChanged()
+        if MainFrame.Visible then
+            setShadowVisible(true, false)
+        else
+            setShadowVisible(false, false)
+        end
+    end
+    MainFrame:GetPropertyChangedSignal("Visible"):Connect(onWindowVisibilityChanged)
     task.delay(0.1, AnimateWindowIn)
 
-    -- 浮动打开按钮（修复尺寸重置 bug）
+    -- 浮动打开按钮
     local OpenButton = Instance.new("ImageButton")
     OpenButton.Name = "FloatingOpenButton"
     OpenButton.Parent = ScreenGui
@@ -3861,7 +3880,6 @@ function Fenglib:CreateWindow(Config)
     openStroke.Color = Color3.fromRGB(180,180,180)
     openStroke.Thickness = 1.2
     openStroke.Transparency = 0.4
-
     OpenButton.MouseButton1Click:Connect(function()
         if MainFrame.Visible then
             MainFrame.Visible = false
@@ -3869,7 +3887,6 @@ function Fenglib:CreateWindow(Config)
         else
             MainFrame.Visible = true
             OpenButton.Visible = false
-            -- 不再重置尺寸，保持用户调整后的大小
         end
     end)
     MainFrame:GetPropertyChangedSignal("Visible"):Connect(function()
@@ -3981,7 +3998,7 @@ function Fenglib:CreateWindow(Config)
         return Window._currentCategory
     end
 
-    -- ===== Window:Tab（完全使用 UI.lua 样式，尺寸恢复为 Test 风格） =====
+    -- ===== Window:Tab =====
     Window._activeTab = nil
     Window._tabs = {}
     function Window:Tab(name, icon)
@@ -3992,7 +4009,6 @@ function Fenglib:CreateWindow(Config)
             parentList = Window._currentCategory.contentList
         end
         local TabBtn = Instance.new("TextButton")
-        -- 改为原 Test.lua 的尺寸：填充父容器宽度，高度30
         TabBtn.Size = UDim2.new(1, -7, 0, 30)
         TabBtn.BackgroundTransparency = 1
         TabBtn.BackgroundColor3 = CurrentTheme.Top
@@ -4000,7 +4016,6 @@ function Fenglib:CreateWindow(Config)
         TabBtn.Parent = parentContainer
         Instance.new("UICorner", TabBtn).CornerRadius = UDim.new(0, 10)
 
-        -- 光晕背景（完全保留 UI.lua 的实现）
         local glowFrame = Instance.new("Frame")
         glowFrame.Name = "GlowBackground"
         glowFrame.Size = UDim2.new(1, 0, 1, 0)
@@ -4016,17 +4031,15 @@ function Fenglib:CreateWindow(Config)
         glowGrad.Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0, 0.55), NumberSequenceKeypoint.new(1, 1)})
         glowGrad.Parent = glowFrame
 
-        -- 侧边指示条（位置调整：下移到居中并略偏下）
         local TabBar = Instance.new("Frame")
         TabBar.Size = UDim2.new(0, 3, 0, 0)
-        TabBar.Position = UDim2.new(0, 0, 0.2, 0)   -- 改为 0.2 使其下移
+        TabBar.Position = UDim2.new(0, 0, 0.2, 0)
         TabBar.BackgroundTransparency = 1
         TabBar.BorderSizePixel = 0
         TabBar.Parent = TabBtn
         Instance.new("UICorner", TabBar).CornerRadius = UDim.new(1, 0)
         AddToRegistry(TabBar, "BackgroundColor3", "Accent")
 
-        -- 内容容器（图标+文字水平布局）
         local ContentFrame = Instance.new("Frame")
         ContentFrame.Name = "ContentFrame"
         ContentFrame.Size = UDim2.new(1, 0, 1, 0)
@@ -4066,7 +4079,6 @@ function Fenglib:CreateWindow(Config)
         TabText.Parent = ContentFrame
         AddToRegistry(TabText, "TextColor3", "Text")
 
-        -- 页面容器
         local Page = Instance.new("ScrollingFrame")
         Page.Size = UDim2.new(1, 0, 1, 0)
         Page.BackgroundTransparency = 1
