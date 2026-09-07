@@ -6,7 +6,8 @@
     [MOD] 移植 miUI 的透明度增强：
       - 背景模糊（DepthOfField + 动态 Part，已修复 PointToObjectSpace）
       - 窗口背景渐变（UIGradient）
-      - 主窗口边框替换为 miUI 式多层阴影，颜色取自第三个文件（k.lua）的红色主题
+      - 主窗口边框替换为 miUI 式多层阴影（移除硬边描边）
+      - 阴影颜色改为黑色（与第三个文件的边框颜色一致）
       - 窗口大小固定为 500×320
       - 背景图默认为空（不显示任何图片）
 ]]
@@ -3340,14 +3341,13 @@ function Fenglib:CreateWindow(Config)
     Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 12)
     AddToRegistry(MainFrame, "BackgroundColor3", "Main")
 
-    -- ===== 移除硬边描边，替换为 miUI 风格的多层阴影（红色） =====
-    local shadowColor = Color3.fromRGB(255, 0, 0)  -- 来自 k.lua 的红色主题
+    -- ===== [MOD] 移除原有的描边（UIStroke），替换为 miUI 风格的多层阴影，颜色改为黑色 =====
     local shadowStrokes = {}
     local thicknesses = {6, 5, 4, 3}
     for _, thick in ipairs(thicknesses) do
         local stroke = Instance.new("UIStroke")
         stroke.Thickness = thick
-        stroke.Color = shadowColor
+        stroke.Color = Color3.new(0, 0, 0)  -- 改为黑色
         stroke.Transparency = 1
         stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
         stroke.Parent = MainFrame
@@ -3402,7 +3402,7 @@ function Fenglib:CreateWindow(Config)
 
     setShadowVisible(false, true)
 
-    -- Resizer
+    -- Resizer (保留)
     local Resizer = Instance.new("TextButton")
     Resizer.Name = "WindowResizer"
     Resizer.Parent = MainFrame
@@ -3446,7 +3446,7 @@ function Fenglib:CreateWindow(Config)
         end
     end)
 
-    -- 背景模糊模块（已修复 PointToObjectSpace）
+    -- 背景模糊模块
     local function CreateBlurModule()
         if not MainFrame or not MainFrame.Parent then return end
         local Part = Instance.new("Part")
@@ -3677,7 +3677,7 @@ function Fenglib:CreateWindow(Config)
     LineFrame_3.Parent = RightHeader
     AddToRegistry(LineFrame_3, "BackgroundColor3", "Stroke")
 
-    -- 三按钮
+    -- 三按钮（与原来完全一致）
     local resizerVisible = false
     local ButtonGroup = Instance.new("Frame")
     ButtonGroup.Name = "WindowButtons"
